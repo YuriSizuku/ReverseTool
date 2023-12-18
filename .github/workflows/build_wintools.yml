@@ -1,6 +1,11 @@
 name: build_tools
 on:
   push: {tags:  ['v*'] } # Push events to matching v*, i.e. v1.0, v20.15.10
+  pull_request: 
+
+permissions:
+  contents: write
+  
 jobs:
   build_winexe_libwinhook:
     runs-on: windows-2019 # default batch, powershell
@@ -8,42 +13,17 @@ jobs:
     - name: pull and init
       uses: actions/checkout@v3
       with: {submodules: true}
+    
     - name: add msbuild to path
       uses: microsoft/setup-msbuild@v1.1
+    
     - name: build winloader
       run: .\project\winexe_winloader\release_msvc.bat
+    
     - name: create a release
       uses: ncipollo/release-action@v1
+      if: github.event_name == 'push'
       with:
         artifacts: "./project/winexe_winloader/build/winloader32.exe,./project/winexe_winloader/build/winloader64.exe"
-        allowUpdates: "true"
-        token: ${{ secrets.GITHUB_TOKEN }}
-
-  build_pyexes:
-    runs-on: windows-2019 # default batch, powershell
-    strategy:
-      matrix:
-        pyexe_name: [bintext, ftext]
-    steps:
-    - name: pull and init
-      uses: actions/checkout@v3
-      with: {submodules: true}
-    - name: set python version
-      uses: actions/setup-python@v3
-      with: 
-        python-version: '3.7'
-        architecture: 'x86' 
-    - name: make python enviroment
-      run: |
-        python -m pip install nuitka zstandard
-        python -m pip install python-docx
-    - name: build single pyexe by nuitka 
-      run: |
-        cmd.exe /c ".\project\pyexe_${{ matrix.pyexe_name }}\build_nuitka.bat"
-        move ".\project\pyexe_${{ matrix.pyexe_name }}\build\c${{ matrix.pyexe_name }}.exe" ".\project\pyexe_${{ matrix.pyexe_name }}\build\c${{ matrix.pyexe_name }}32.exe"
-    - name: create a release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "./project/pyexe_${{ matrix.pyexe_name }}/build/*.exe"
         allowUpdates: "true"
         token: ${{ secrets.GITHUB_TOKEN }}

@@ -4,7 +4,7 @@ ARCH?=i686
 PREFIX?=./build
 
 CC:=clang
-INCS:=-I$(LIBPREFIX)src/c/include
+INCS:=-I$(LIBPREFIX)src
 LIBDIRS:=
 LIBS:=-luser32 -lgdi32 -lpsapi
 CFLAGS:=-ffunction-sections\
