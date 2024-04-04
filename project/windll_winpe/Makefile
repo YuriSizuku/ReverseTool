@@ -1,6 +1,7 @@
 # build example
-# make libwinpe libwinpe_test CC=gcc BUILD=32d 
-# make libwinpe libwinpe_test CC=gcc BUILD=64d
+# make libwinpe libwinpe_test CC=i686-w64-mingw32-gcc BUILD=32d 
+# make libwinpe libwinpe_test CC=x86_64-w64-mingw32-gcc BUILD=64d
+# wine build/libwinpe_test32d.exe && wine build/libwinpe_test64d.exe
 
 # general config
 CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
@@ -49,7 +50,7 @@ libwinpe: src/libwinpe.c
 libwinpe_test: src/libwinpe_test.c
 	@echo "## $@"
 	$(CC) $< -o $(BUILD_DIR)/$@$(BUILD).exe \
-		-L$(BUILD_DIR) -lwinpe$(BUILD) \
+		-L$(BUILD_DIR) -lwinpe$(BUILD) -DWINPE_NOINLINE \
 		$(INCS) $(LIBS) \
 		$(CFLAGS) $(LDFLAGS)
 

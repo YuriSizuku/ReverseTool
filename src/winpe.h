@@ -67,7 +67,7 @@
 #else
 #define WINPE_API_EXPORT
 #endif // WINPE_SHARED
-#if defined(WINPE_NOINLINE) || !defined(WINPE_IMPLEMENTATION) 
+#ifdef WINPE_NOINLINE
 #define WINPE_API_INLINE
 #else
 #define WINPE_API_INLINE INLINE
@@ -362,7 +362,7 @@ INLINE int _winpeinl_stricmp(const char *str1, const char *str2)
     return (int)str1[i] - (int)str2[i];
 }
 
-INLINE int _winpeinl_wcsicmp(const char *str1, const wchar_t* str2)
+INLINE int _winpeinl_stricmp2(const char *str1, const wchar_t* str2)
 {
     int i=0;
     while(str1[i]!=0 && str2[i]!=0)
@@ -461,13 +461,11 @@ void* STDCALL winpe_overlayload_file(const char *path, size_t *poverlaysize)
 
 void* STDCALL winpe_memLoadLibrary(void *mempe)
 {
-    PFN_LoadLibraryA pfnLoadLibraryA = 
-        (PFN_LoadLibraryA)winpe_findloadlibrarya();
-    PFN_GetProcAddress pfnGetProcAddress = 
-        (PFN_GetProcAddress)winpe_findgetprocaddress();
+    PFN_LoadLibraryA pfnLoadLibraryA = (PFN_LoadLibraryA)winpe_findloadlibrarya();
+    PFN_GetProcAddress pfnGetProcAddress = (PFN_GetProcAddress)winpe_findgetprocaddress();
     return winpe_memLoadLibraryEx(mempe, 0, 
-        WINPE_LDFLAG_MEMFIND | WINPE_LDFLAG_MEMALLOC, 
-        pfnLoadLibraryA, pfnGetProcAddress);
+                WINPE_LDFLAG_MEMFIND | WINPE_LDFLAG_MEMALLOC, 
+                pfnLoadLibraryA, pfnGetProcAddress);
 }
 
 void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
@@ -479,12 +477,9 @@ void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
     char name_VirtualAlloc[] = {'V', 'i', 'r', 't', 'u', 'a', 'l', 'A', 'l', 'l', 'o', 'c', '\0'};
     char name_VirtualProtect[] = {'V', 'i', 'r', 't', 'u', 'a', 'l', 'P', 'r', 'o', 't', 'e', 'c', 't', '\0'};
     HMODULE hmod_kernel32 = pfnLoadLibraryA(name_kernel32);
-    PFN_VirtualQuery pfnVirtualQuery = (PFN_VirtualQuery)
-        pfnGetProcAddress(hmod_kernel32, name_VirtualQuery);
-    PFN_VirtualAlloc pfnVirtualAlloc = (PFN_VirtualAlloc)
-        pfnGetProcAddress(hmod_kernel32, name_VirtualAlloc);
-    PFN_VirtualProtect pfnVirtualProtect =(PFN_VirtualProtect)
-        pfnGetProcAddress(hmod_kernel32, name_VirtualProtect);
+    PFN_VirtualQuery pfnVirtualQuery = (PFN_VirtualQuery)pfnGetProcAddress(hmod_kernel32, name_VirtualQuery);
+    PFN_VirtualAlloc pfnVirtualAlloc = (PFN_VirtualAlloc)pfnGetProcAddress(hmod_kernel32, name_VirtualAlloc);
+    PFN_VirtualProtect pfnVirtualProtect =(PFN_VirtualProtect)pfnGetProcAddress(hmod_kernel32, name_VirtualProtect);
     assert(pfnVirtualQuery!=0 && pfnVirtualAlloc!=0 && pfnVirtualProtect!=0);
 
     // find proper imagebase
@@ -492,26 +487,21 @@ void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
     if(flag & WINPE_LDFLAG_MEMFIND)
     {
         imagebase = winpe_imagebaseval(mempe, 0);
-        imagebase = (size_t)winpe_findspace(imagebase,
-            imagesize, 0x10000, pfnVirtualQuery);
+        imagebase = (size_t)winpe_findspace(imagebase, imagesize, 0x10000, pfnVirtualQuery);
     }
     if(flag & WINPE_LDFLAG_MEMALLOC) // find proper memory to reloc
     {
 
-        imagebase = (size_t)pfnVirtualAlloc((void*)imagebase, 
-            imagesize, MEM_COMMIT | MEM_RESERVE, 
-            PAGE_EXECUTE_READWRITE);
+        imagebase = (size_t)pfnVirtualAlloc((void*)imagebase, imagesize, 
+                            MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
         if(!imagebase) // try alloc in arbitary place
         {
-            imagebase = (size_t)pfnVirtualAlloc(NULL, 
-                imagesize, MEM_COMMIT, 
-                PAGE_EXECUTE_READWRITE);
+            imagebase = (size_t)pfnVirtualAlloc(NULL, imagesize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
             if(!imagebase) return NULL;
         }
         else
         {
-            imagebase = (size_t)pfnVirtualAlloc((void*)imagebase, 
-                imagesize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+            imagebase = (size_t)pfnVirtualAlloc((void*)imagebase, imagesize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
             if(!imagebase) return NULL;            
         }
     }
@@ -524,33 +514,25 @@ void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
     else
     {
         DWORD oldprotect;
-        pfnVirtualProtect((void*)imagebase, imagesize, 
-            PAGE_EXECUTE_READWRITE, &oldprotect);
+        pfnVirtualProtect((void*)imagebase, imagesize, PAGE_EXECUTE_READWRITE, &oldprotect);
         _winpeinl_memcpy((void*)imagebase, mempe, imagesize);
-        pfnVirtualProtect((void*)imagebase, imagesize, 
-            oldprotect, &oldprotect);
+        pfnVirtualProtect((void*)imagebase, imagesize, oldprotect, &oldprotect);
     }
 
     // initial memory module
-    if(!winpe_memreloc((void*)imagebase, imagebase))
-        return NULL;
-    if(!winpe_membindiat((void*)imagebase, 
-        pfnLoadLibraryA, pfnGetProcAddress)) return NULL;
+    if(!winpe_memreloc((void*)imagebase, imagebase)) return NULL;
+    if(!winpe_membindiat((void*)imagebase, pfnLoadLibraryA, pfnGetProcAddress)) return NULL;
     winpe_membindtls(mempe, DLL_PROCESS_ATTACH);
-    PFN_DllMain pfnDllMain = (PFN_DllMain)
-        (imagebase + winpe_oepval((void*)imagebase, 0));
+    PFN_DllMain pfnDllMain = (PFN_DllMain)(imagebase + winpe_oepval((void*)imagebase, 0));
     pfnDllMain((HINSTANCE)imagebase, DLL_PROCESS_ATTACH, NULL);
     return (void*)imagebase;
 }
 
 BOOL STDCALL winpe_memFreeLibrary(void *mempe)
 {
-    PFN_LoadLibraryA pfnLoadLibraryA = 
-        (PFN_LoadLibraryA)winpe_findloadlibrarya();
-    PFN_GetProcAddress pfnGetProcAddress = 
-        (PFN_GetProcAddress)winpe_findgetprocaddress();
-    return winpe_memFreeLibraryEx(mempe, 
-        pfnLoadLibraryA, pfnGetProcAddress);
+    PFN_LoadLibraryA pfnLoadLibraryA = (PFN_LoadLibraryA)winpe_findloadlibrarya();
+    PFN_GetProcAddress pfnGetProcAddress = (PFN_GetProcAddress)winpe_findgetprocaddress();
+    return winpe_memFreeLibraryEx(mempe, pfnLoadLibraryA, pfnGetProcAddress);
 }
 
 BOOL STDCALL winpe_memFreeLibraryEx(void *mempe, 
@@ -559,10 +541,8 @@ BOOL STDCALL winpe_memFreeLibraryEx(void *mempe,
     char name_kernel32[] = {'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '\0'};
     char name_VirtualFree[] = {'V', 'i', 'r', 't', 'u', 'a', 'l', 'F', 'r', 'e', 'e', '\0'};
     HMODULE hmod_kernel32 = pfnLoadLibraryA(name_kernel32);
-    PFN_VirtualFree pfnVirtualFree = (PFN_VirtualFree)
-        pfnGetProcAddress(hmod_kernel32, name_VirtualFree);
-    PFN_DllMain pfnDllMain = (PFN_DllMain)
-        ((uint8_t*)mempe + winpe_oepval(mempe, 0));
+    PFN_VirtualFree pfnVirtualFree = (PFN_VirtualFree)pfnGetProcAddress(hmod_kernel32, name_VirtualFree);
+    PFN_DllMain pfnDllMain = (PFN_DllMain)((uint8_t*)mempe + winpe_oepval(mempe, 0));
     winpe_membindtls(mempe, DLL_PROCESS_DETACH);
     pfnDllMain((HINSTANCE)mempe, DLL_PROCESS_DETACH, NULL);
     return pfnVirtualFree(mempe, 0, MEM_FREE);
@@ -682,25 +662,22 @@ void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename)
 #endif 
 
     // InMemoryOrderModuleList is the second entry
-    ldrentry = (PLDR_ENTRY)((size_t)
-        ldr->InMemoryOrderModuleList.Flink - 2*sizeof(size_t));
+    ldrentry = (PLDR_ENTRY)((size_t)ldr->InMemoryOrderModuleList.Flink - 2*sizeof(size_t));
     if(!modulename)
     {
         return ldrentry->DllBase;
     }
-    while(ldrentry->InMemoryOrderLinks.Flink != 
-        ldr->InMemoryOrderModuleList.Flink)
+    while(ldrentry->InMemoryOrderLinks.Flink != ldr->InMemoryOrderModuleList.Flink)
     {
         PUNICODE_STRING ustr = &ldrentry->FullDllName;
         int i;
         for(i=ustr->Length/2-1; i>0 && ustr->Buffer[i]!='\\';i--);
         if(ustr->Buffer[i]=='\\') i++;
-        if(_winpeinl_wcsicmp(modulename,  ustr->Buffer + i)==0)
+        if(_winpeinl_stricmp2(modulename,  ustr->Buffer + i)==0)
         {
             return ldrentry->DllBase;
         }
-        ldrentry = (PLDR_ENTRY)((size_t)
-            ldrentry->InMemoryOrderLinks.Flink - 2*sizeof(size_t));
+        ldrentry = (PLDR_ENTRY)((size_t)ldrentry->InMemoryOrderLinks.Flink - 2*sizeof(size_t));
     }
     return NULL;
 }
@@ -710,8 +687,8 @@ PROC winpe_findloadlibrarya()
     // return (PROC)LoadLibraryA;
     HMODULE hmod_kernel32 = (HMODULE)winpe_findkernel32();
     char name_LoadLibraryA[] = {'L', 'o', 'a', 'd', 'L', 'i', 'b', 'r', 'a', 'r', 'y', 'A', '\0'};
-    return (PROC)winpe_memfindexp( // suppose exp no forward, to avoid recursive
-        (void*)hmod_kernel32, name_LoadLibraryA);
+    // suppose exp no forward, to avoid recursive
+    return (PROC)winpe_memfindexp((void*)hmod_kernel32, name_LoadLibraryA);
 }
 
 PROC winpe_findgetprocaddress()
@@ -722,22 +699,17 @@ PROC winpe_findgetprocaddress()
     return (PROC)winpe_memfindexp(hmod_kernel32, name_GetProcAddress);
 }
 
-void* STDCALL winpe_findspace(
-    size_t imagebase, size_t imagesize, size_t alignsize, 
-    PFN_VirtualQuery pfnVirtualQuery)
+void* STDCALL winpe_findspace(size_t imagebase, 
+    size_t imagesize, size_t alignsize, PFN_VirtualQuery pfnVirtualQuery)
 {
 #define MAX_QUERY 0x1000
     size_t addr = imagebase;
     MEMORY_BASIC_INFORMATION minfo;
     for (int i=0;i<MAX_QUERY;i++)
     {
-        if(addr % alignsize) addr += 
-            alignsize - addr% alignsize;
-        pfnVirtualQuery((LPVOID)addr, 
-            &minfo, sizeof(MEMORY_BASIC_INFORMATION));
-        if(minfo.State==MEM_FREE 
-            && minfo.RegionSize >= imagesize) 
-            return (void*)addr;
+        if(addr % alignsize) addr += alignsize - addr% alignsize;
+        pfnVirtualQuery((LPVOID)addr, &minfo, sizeof(MEMORY_BASIC_INFORMATION));
+        if(minfo.State==MEM_FREE && minfo.RegionSize >= imagesize) return (void*)addr;
         addr += minfo.RegionSize;
     }
     return NULL;
@@ -747,17 +719,13 @@ void* STDCALL winpe_findspace(
 size_t STDCALL winpe_overlayoffset(const void *rawpe)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)rawpe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)rawpe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)rawpe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)
-        ((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
+    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
     WORD sectNum = pFileHeader->NumberOfSections;
-
-    return pSectHeader[sectNum-1].PointerToRawData + 
-           pSectHeader[sectNum-1].SizeOfRawData;
+    return pSectHeader[sectNum-1].PointerToRawData + pSectHeader[sectNum-1].SizeOfRawData;
 }
 
 size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize, 
@@ -765,12 +733,10 @@ size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize,
 {
     // load rawpe to memalign
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)rawpe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)rawpe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)rawpe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
-    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)
-        ((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
+    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
     WORD sectNum = pFileHeader->NumberOfSections;
     size_t imagesize = pOptHeader->SizeOfImage;
     if(!mempe) return imagesize;
@@ -781,9 +747,8 @@ size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize,
     
     for(WORD i=0;i<sectNum;i++)
     {
-        _winpeinl_memcpy((uint8_t*)mempe+pSectHeader[i].VirtualAddress,
-            (uint8_t*)rawpe+pSectHeader[i].PointerToRawData,
-            pSectHeader[i].SizeOfRawData);
+        _winpeinl_memcpy((uint8_t*)mempe+pSectHeader[i].VirtualAddress, 
+            (uint8_t*)rawpe+pSectHeader[i].PointerToRawData, pSectHeader[i].SizeOfRawData);
     }
 
     // adjust all to mem align
@@ -793,12 +758,9 @@ size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize,
         pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
         pFileHeader = &pNtHeader->FileHeader;
         pOptHeader = &pNtHeader->OptionalHeader;
-        pSectHeader = (PIMAGE_SECTION_HEADER)
-            ((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
+        pSectHeader = (PIMAGE_SECTION_HEADER)((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
         sectNum = pFileHeader->NumberOfSections;
-
         pOptHeader->FileAlignment = pOptHeader->SectionAlignment;
-
         for(WORD i=0;i<sectNum;i++)
         {
             pSectHeader[i].PointerToRawData = pSectHeader[i].VirtualAddress;
@@ -810,8 +772,7 @@ size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize,
 size_t STDCALL winpe_memreloc(void *mempe, size_t newimagebase)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
@@ -819,29 +780,23 @@ size_t STDCALL winpe_memreloc(void *mempe, size_t newimagebase)
 	
     DWORD reloc_count = 0;
     DWORD reloc_offset = 0;
-    int64_t shift = (int64_t)newimagebase - 
-        (int64_t)pOptHeader->ImageBase;
+    int64_t shift = (int64_t)newimagebase - (int64_t)pOptHeader->ImageBase;
 	while (reloc_offset < pRelocEntry->Size)
 	{
 		PIMAGE_BASE_RELOCATION pBaseReloc = (PIMAGE_BASE_RELOCATION)
             ((uint8_t*)mempe + pRelocEntry->VirtualAddress + reloc_offset);
-        PRELOCOFFSET pRelocOffset = (PRELOCOFFSET)((uint8_t*)pBaseReloc
-            + sizeof(IMAGE_BASE_RELOCATION));
-		DWORD item_num = (pBaseReloc->SizeOfBlock - // RELOCOFFSET block num
-			sizeof(IMAGE_BASE_RELOCATION)) / sizeof(RELOCOFFSET);
+        PRELOCOFFSET pRelocOffset = (PRELOCOFFSET)((uint8_t*)pBaseReloc + sizeof(IMAGE_BASE_RELOCATION));
+		DWORD item_num = (pBaseReloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / sizeof(RELOCOFFSET);
 		for (size_t i = 0; i < item_num; i++)
 		{
-			if (!pRelocOffset[i].type && 
-                !pRelocOffset[i].offset) continue;
-			DWORD targetoffset = pBaseReloc->VirtualAddress + 
-                    pRelocOffset[i].offset;
+			if (!pRelocOffset[i].type && !pRelocOffset[i].offset) continue;
+			DWORD targetoffset = pBaseReloc->VirtualAddress + pRelocOffset[i].offset;
             size_t *paddr = (size_t *)((uint8_t*)mempe + targetoffset);
             size_t relocaddr = (size_t)((int64_t)*paddr + shift);
             //printf("reloc 0x%08x->0x%08x\n", *paddr, relocaddr);
             *paddr = relocaddr;
 		}
-		reloc_offset += sizeof(IMAGE_BASE_RELOCATION) + 
-            sizeof(RELOCOFFSET) * item_num;
+		reloc_offset += sizeof(IMAGE_BASE_RELOCATION) + sizeof(RELOCOFFSET) * item_num;
 		reloc_count += item_num;
 	}
     pOptHeader->ImageBase = newimagebase;
@@ -852,15 +807,12 @@ size_t STDCALL winpe_membindiat(void *mempe,
     PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_DATA_DIRECTORY pImpEntry =  
-        &pDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    PIMAGE_IMPORT_DESCRIPTOR pImpDescriptor =  
-        (PIMAGE_IMPORT_DESCRIPTOR)((uint8_t*)mempe + pImpEntry->VirtualAddress);
+    PIMAGE_DATA_DIRECTORY pImpEntry = &pDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    PIMAGE_IMPORT_DESCRIPTOR pImpDescriptor =  (PIMAGE_IMPORT_DESCRIPTOR)((uint8_t*)mempe + pImpEntry->VirtualAddress);
 
     PIMAGE_THUNK_DATA pFtThunk = NULL;
     PIMAGE_THUNK_DATA pOftThunk = NULL;
@@ -870,24 +822,19 @@ size_t STDCALL winpe_membindiat(void *mempe,
     char *funcname = NULL;
 
     // origin GetProcAddress will crash at InitializeSListHead 
-    if(!pfnLoadLibraryA) pfnLoadLibraryA = 
-        (PFN_LoadLibraryA)winpe_findloadlibrarya();
-    if(!pfnGetProcAddress) pfnGetProcAddress = 
-        (PFN_GetProcAddress)winpe_findgetprocaddress();
+    if(!pfnLoadLibraryA) pfnLoadLibraryA = (PFN_LoadLibraryA)winpe_findloadlibrarya();
+    if(!pfnGetProcAddress) pfnGetProcAddress = (PFN_GetProcAddress)winpe_findgetprocaddress();
 
     DWORD iat_count = 0;
     for (; pImpDescriptor->Name; pImpDescriptor++) 
     {
         pDllName = (LPCSTR)((uint8_t*)mempe + pImpDescriptor->Name);
-        pFtThunk = (PIMAGE_THUNK_DATA)
-            ((uint8_t*)mempe + pImpDescriptor->FirstThunk);
-        pOftThunk = (PIMAGE_THUNK_DATA)
-            ((uint8_t*)mempe + pImpDescriptor->OriginalFirstThunk);
+        pFtThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->FirstThunk);
+        pOftThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->OriginalFirstThunk);
         size_t dllbase = (size_t)pfnLoadLibraryA(pDllName);
         if(!dllbase) return 0;
 
-        for (int j=0; pFtThunk[j].u1.Function 
-            &&  pOftThunk[j].u1.Function; j++) 
+        for (int j=0; pFtThunk[j].u1.Function &&  pOftThunk[j].u1.Function; j++) 
         {
             size_t _addr = (size_t)((uint8_t*)mempe + pOftThunk[j].u1.AddressOfData);
             if(sizeof(size_t)>4) // x64
@@ -915,12 +862,10 @@ size_t STDCALL winpe_membindiat(void *mempe,
                 }
             }
 
-            funcva = (size_t)pfnGetProcAddress(
-                (HMODULE)dllbase, funcname);
+            funcva = (size_t)pfnGetProcAddress((HMODULE)dllbase, funcname);
             if(!funcva) continue;
             pFtThunk[j].u1.Function = funcva;
-            assert(funcva == (size_t)GetProcAddress(
-                (HMODULE)dllbase, funcname));
+            assert(funcva == (size_t)GetProcAddress((HMODULE)dllbase, funcname));
             iat_count++;
         }
     }
@@ -930,20 +875,16 @@ size_t STDCALL winpe_membindiat(void *mempe,
 size_t STDCALL winpe_membindtls(void *mempe, DWORD reason)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_DATA_DIRECTORY pTlsDirectory = 
-        &pDataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    PIMAGE_DATA_DIRECTORY pTlsDirectory = &pDataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
     if(!pTlsDirectory->VirtualAddress) return 0;
 
     size_t tls_count = 0;
-    PIMAGE_TLS_DIRECTORY pTlsEntry = (PIMAGE_TLS_DIRECTORY)
-        ((uint8_t*)mempe + pTlsDirectory->VirtualAddress);
-    PIMAGE_TLS_CALLBACK *tlscb= (PIMAGE_TLS_CALLBACK*)
-        pTlsEntry->AddressOfCallBacks;
+    PIMAGE_TLS_DIRECTORY pTlsEntry = (PIMAGE_TLS_DIRECTORY)((uint8_t*)mempe + pTlsDirectory->VirtualAddress);
+    PIMAGE_TLS_CALLBACK *tlscb= (PIMAGE_TLS_CALLBACK*)pTlsEntry->AddressOfCallBacks;
     if(tlscb)
     {
         while(*tlscb)
@@ -959,16 +900,12 @@ size_t STDCALL winpe_membindtls(void *mempe, DWORD reason)
 void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_DATA_DIRECTORY pImpEntry =  
-        &pDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    PIMAGE_IMPORT_DESCRIPTOR pImpDescriptor =  
-        (PIMAGE_IMPORT_DESCRIPTOR)((uint8_t*)mempe + pImpEntry->VirtualAddress);
-
+    PIMAGE_DATA_DIRECTORY pImpEntry =  &pDataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    PIMAGE_IMPORT_DESCRIPTOR pImpDescriptor = (PIMAGE_IMPORT_DESCRIPTOR)((uint8_t*)mempe + pImpEntry->VirtualAddress);
     PIMAGE_THUNK_DATA pFtThunk = NULL;
     PIMAGE_THUNK_DATA pOftThunk = NULL;
     LPCSTR pDllName = NULL;
@@ -978,26 +915,20 @@ void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
     {
         pDllName = (LPCSTR)((uint8_t*)mempe + pImpDescriptor->Name);
         if(dllname && _winpeinl_stricmp(pDllName, dllname)!=0) continue;
-        pFtThunk = (PIMAGE_THUNK_DATA)
-            ((uint8_t*)mempe + pImpDescriptor->FirstThunk);
-        pOftThunk = (PIMAGE_THUNK_DATA)
-            ((uint8_t*)mempe + pImpDescriptor->OriginalFirstThunk);
+        pFtThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->FirstThunk);
+        pOftThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->OriginalFirstThunk);
 
-        for (int j=0; pFtThunk[j].u1.Function 
-            &&  pOftThunk[j].u1.Function; j++) 
+        for (int j=0; pFtThunk[j].u1.Function &&  pOftThunk[j].u1.Function; j++) 
         {
-            pImpByName=(PIMAGE_IMPORT_BY_NAME)((uint8_t*)mempe +
-                pOftThunk[j].u1.AddressOfData);
+            pImpByName=(PIMAGE_IMPORT_BY_NAME)((uint8_t*)mempe + pOftThunk[j].u1.AddressOfData);
             if((size_t)funcname < MAXWORD) // ordinary
             {
                 WORD funcord = LOWORD(funcname);
-                if(pImpByName->Hint == funcord)
-                    return &pFtThunk[j];
+                if(pImpByName->Hint == funcord) return &pFtThunk[j];
             }
             else
             {
-                if(_winpeinl_stricmp(pImpByName->Name, funcname)==0) 
-                    return &pFtThunk[j];
+                if(_winpeinl_stricmp(pImpByName->Name, funcname)==0) return &pFtThunk[j];
             }
         }
     }
@@ -1007,22 +938,16 @@ void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
 void* STDCALL winpe_memfindexp(void *mempe, LPCSTR funcname)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_DATA_DIRECTORY pExpEntry =  
-        &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-    PIMAGE_EXPORT_DIRECTORY  pExpDescriptor =  
-        (PIMAGE_EXPORT_DIRECTORY)((uint8_t*)mempe + pExpEntry->VirtualAddress);
+    PIMAGE_DATA_DIRECTORY pExpEntry =  &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    PIMAGE_EXPORT_DIRECTORY  pExpDescriptor =  (PIMAGE_EXPORT_DIRECTORY)((uint8_t*)mempe + pExpEntry->VirtualAddress);
 
-    WORD *ordrva = (WORD*)((uint8_t*)mempe 
-        + pExpDescriptor->AddressOfNameOrdinals);
-    DWORD *namerva = (DWORD*)((uint8_t*)mempe 
-        + pExpDescriptor->AddressOfNames);
-    DWORD *funcrva = (DWORD*)((uint8_t*)mempe 
-        + pExpDescriptor->AddressOfFunctions);
+    WORD *ordrva = (WORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfNameOrdinals);
+    DWORD *namerva = (DWORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfNames);
+    DWORD *funcrva = (DWORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfFunctions);
     if((size_t)funcname <= MAXWORD) // find by ordnial
     {
         WORD ordbase = LOWORD(pExpDescriptor->Base) - 1;
@@ -1046,22 +971,16 @@ void* STDCALL winpe_memfindexp(void *mempe, LPCSTR funcname)
 void* STDCALL winpe_memfindexpcrc32(void* mempe, uint32_t crc32)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)mempe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-    PIMAGE_DATA_DIRECTORY pExpEntry =
-        &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-    PIMAGE_EXPORT_DIRECTORY  pExpDescriptor =
-        (PIMAGE_EXPORT_DIRECTORY)((uint8_t*)mempe + pExpEntry->VirtualAddress);
+    PIMAGE_DATA_DIRECTORY pExpEntry = &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    PIMAGE_EXPORT_DIRECTORY  pExpDescriptor =(PIMAGE_EXPORT_DIRECTORY)((uint8_t*)mempe + pExpEntry->VirtualAddress);
 
-    WORD* ordrva = (WORD*)((uint8_t*)mempe
-        + pExpDescriptor->AddressOfNameOrdinals);
-    DWORD* namerva = (DWORD*)((uint8_t*)mempe
-        + pExpDescriptor->AddressOfNames);
-    DWORD* funcrva = (DWORD*)((uint8_t*)mempe
-        + pExpDescriptor->AddressOfFunctions);
+    WORD* ordrva = (WORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfNameOrdinals);
+    DWORD* namerva = (DWORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfNames);
+    DWORD* funcrva = (DWORD*)((uint8_t*)mempe + pExpDescriptor->AddressOfFunctions);
     for (DWORD i = 0; i < pExpDescriptor->NumberOfNames; i++)
     {
         LPCSTR curname = (LPCSTR)((uint8_t*)mempe + namerva[i]);
@@ -1083,14 +1002,11 @@ void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva,
     while (1)
     {
         PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)dllbase;
-        PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-            ((uint8_t*)dllbase + pDosHeader->e_lfanew);
+        PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)dllbase + pDosHeader->e_lfanew);
         PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
         PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
-        PIMAGE_DATA_DIRECTORY pExpEntry =  
-            &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-        if(exprva>=pExpEntry->VirtualAddress && 
-            exprva<= pExpEntry->VirtualAddress + pExpEntry->Size)
+        PIMAGE_DATA_DIRECTORY pExpEntry = &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+        if(exprva>=pExpEntry->VirtualAddress && exprva<= pExpEntry->VirtualAddress + pExpEntry->Size)
         {
             char namebuf[MAX_PATH];
             char *dllname = (char *)(dllbase + exprva);
@@ -1132,8 +1048,7 @@ void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva,
 void STDCALL winpe_noaslr(void *pe)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)pe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)pe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     #ifndef IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE
@@ -1145,8 +1060,7 @@ void STDCALL winpe_noaslr(void *pe)
 DWORD STDCALL winpe_oepval(void *pe, DWORD newoeprva)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)pe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)pe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     DWORD orgoep = pOptHeader->AddressOfEntryPoint;
@@ -1157,8 +1071,7 @@ DWORD STDCALL winpe_oepval(void *pe, DWORD newoeprva)
 size_t STDCALL winpe_imagebaseval(void *pe, size_t newimagebase)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)pe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)pe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     size_t imagebase = pOptHeader->ImageBase;
@@ -1169,8 +1082,7 @@ size_t STDCALL winpe_imagebaseval(void *pe, size_t newimagebase)
 size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)pe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)pe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
     size_t imagesize = pOptHeader->SizeOfImage;
@@ -1181,20 +1093,16 @@ size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize)
 size_t STDCALL winpe_appendsecth(void *pe, PIMAGE_SECTION_HEADER psecth)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
-        ((uint8_t*)pe + pDosHeader->e_lfanew);
+    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)pe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
-    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)
-        ((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
+    PIMAGE_SECTION_HEADER pSectHeader = (PIMAGE_SECTION_HEADER)((uint8_t*)pOptHeader + pFileHeader->SizeOfOptionalHeader);
     WORD sectNum = pFileHeader->NumberOfSections;
     PIMAGE_SECTION_HEADER pLastSectHeader = &pSectHeader[sectNum-1];
     DWORD addr, align;
 
     // check the space to append section
-    if(pFileHeader->SizeOfOptionalHeader 
-        + sizeof(IMAGE_SECTION_HEADER)
-     > pSectHeader[0].PointerToRawData) return 0;
+    if(pFileHeader->SizeOfOptionalHeader + sizeof(IMAGE_SECTION_HEADER)> pSectHeader[0].PointerToRawData) return 0;
 
     // fill rva addr
     align = pOptHeader->SectionAlignment;
@@ -1221,18 +1129,18 @@ size_t STDCALL winpe_appendsecth(void *pe, PIMAGE_SECTION_HEADER psecth)
 #endif // WINPE_IMPLEMENTATION
 #endif // _WINPE_H
 
-/*
-history:
-v0.1, initial version, with load pe in memory align
-V0.1.2, adjust declear name, load pe iat
-v0.2, add append section, findiat function
-v0.2.2, add function winpe_memfindexp
-v0.2.5, INLINE basic functions, better for shellcode
-v0.3, add winpe_memloadlibrary, winpe_memGetprocaddress, winpe_memFreelibrary
-v0.3.1, fix the stdcall function name by .def, load memory moudule aligned with 0x1000(x86), 0x10000(x64)
-v0.3.2, x64 memory load support, winpe_findkernel32, winpe_finmodule by asm
-v0.3.3, add ordinal support in winpe_membindiat, add win_membindtls, change all call to STDCALL
-v0.3.4, add WINPE_NOASM to make compatible for vs x64
-v0.3.5, add winpe_memfindexpcrc32
-v0.3.6, add AT&T format asm for gcc, improve macro style and comment
+/**
+ * history:
+ * v0.1, initial version, with load pe in memory align
+ * V0.1.2, adjust declear name, load pe iat
+ * v0.2, add append section, findiat function
+ * v0.2.2, add function winpe_memfindexp
+ * v0.2.5, INLINE basic functions, better for shellcode
+ * v0.3, add winpe_memloadlibrary, winpe_memGetprocaddress, winpe_memFreelibrary
+ * v0.3.1, fix the stdcall function name by .def, load memory moudule aligned with 0x1000(x86), 0x10000(x64)
+ * v0.3.2, x64 memory load support, winpe_findkernel32, winpe_finmodule by asm
+ * v0.3.3, add ordinal support in winpe_membindiat, add win_membindtls, change all call to STDCALL
+ * v0.3.4, add WINPE_NOASM to make compatible for vs x64
+ * v0.3.5, add winpe_memfindexpcrc32
+ * v0.3.6, add AT&T format asm for gcc, improve macro style and comment
 */
