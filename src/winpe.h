@@ -1,63 +1,89 @@
-/*
-This tool is for parsing windows pe structure, adjust realoc addrs, or iat.
-Most functions are independent by INLINE all parts, 
-so that this can also be used as shellcode
-    v0.3.5, developed by devseed 
+/**
+ * Single header project for windows pe structure, adjusting realoc addrs, or iat. 
+ *    v0.3.6, developed by devseed
+ * 
+ * macros:
+ *    WINPE_IMPLEMENT, include defines of each function
+ *    WINPE_SHARED, make function export
+ *    WINPE_STATIC, make function static
+ *    WINPE_NOASM, don't use inline asm
+ *    WINPE_NOINLINE, don't use inline function
 */
 
 #ifndef _WINPE_H
 #define _WINPE_H
-#define WINPE_VERSION 350
+#define WINPE_VERSION 360
 
-#include <stdint.h>
-#include <windows.h>
-#include <winternl.h>
-
-#ifndef WINPEDEF
-#ifdef WINPE_STATIC
-#define WINPEDEF static
-#else
-#define WINPEDEF extern
-#endif
-#endif
-
-#ifndef WINPE_SHARED
-#define WINPE_EXPORT
-#else
-#if defined(_WIN32)
-#define WINPE_EXPORT __declspec(dllexport)
-#else
-#define WINPE_EXPORT __attribute__((visibility("default")))
-#endif
-#endif
-
-#if defined(_WIN32)
+// define general macro
+#if defined(_MSC_VER) || defined(__TINYC__)
 #ifndef STDCALL
 #define STDCALL __stdcall
 #endif
-#ifdef NAKED
+#ifndef NAKED
 #define NAKED __declspec(naked)
+#endif
+#ifndef INLINE
+#define INLINE __forceinline
+#endif
+#ifndef EXPORT
+#define EXPORT __declspec(dllexport)
 #endif
 #else
 #ifndef STDCALL
 #define STDCALL __attribute__((stdcall))
 #endif
-#ifdef NAKED
+#ifndef NAKED
 #define NAKED __attribute__((naked))
 #endif
-#endif
-
 #ifndef INLINE
-#if defined(_MSC_VER) 
-#define INLINE __forceinline
-#else  // tcc, gcc not support inline export, tcc inline will output nofunction ...
-#define INLINE
+#define INLINE __attribute__((always_inline)) inline
 #endif
+#ifndef EXPORT 
+#define EXPORT __attribute__((visibility("default")))
+#endif
+#endif // _MSC_VER
+
+// define specific macro
+#ifdef WINPE_API
+#undef WINPE_API
+#endif
+#ifdef WINPE_API_DEF
+#undef WINPE_API_DEF
+#endif
+#ifdef WINPE_API_EXPORT
+#undef WINPE_API_EXPORT
+#endif
+#ifdef WINPE_API_INLINE
+#undef WINPE_API_INLINE
 #endif
 
+#ifdef WINPE_STATIC
+#define WINPE_API_DEF static
+#else
+#define WINPE_API_DEF extern
+#endif // WINPE_STATIC
+#ifdef WINPE_SHARED
+#define WINPE_API_EXPORT EXPORT
+#else
+#define WINPE_API_EXPORT
+#endif // WINPE_SHARED
+#if defined(WINPE_NOINLINE) || !defined(WINPE_IMPLEMENTATION) 
+#define WINPE_API_INLINE
+#else
+#define WINPE_API_INLINE INLINE
+#endif // WINPE_NOINLINE
+
+#define WINPE_API WINPE_API_DEF WINPE_API_EXPORT WINPE_API_INLINE
+
+
+// declear
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif //  __cplusplus
+#include <stdint.h>
+#include <windows.h>
+#include <winternl.h>
+
 typedef struct _RELOCOFFSET
 {
     WORD offset : 12;
@@ -97,242 +123,205 @@ typedef BOOL (WINAPI *PFN_DllMain)(HINSTANCE hinstDLL,
 #define WINPE_LDFLAG_MEMALLOC 0x1
 #define WINPE_LDFLAG_MEMFIND 0x2
 
-// PE high order fnctions
-/*
-  load the origin rawpe file in memory buffer by mem align
-  mempe means the pe in memory alignment
-    return mempe buffer, memsize
+/**
+ * load the origin rawpe file in memory buffer by mem align
+ * mempe means the pe in memory alignment
+ * @param pmemsize mempe buffer size
+ * @return mempe buf
 */
-WINPEDEF WINPE_EXPORT 
-void* STDCALL winpe_memload_file(const char *path, 
-    size_t *pmemsize, bool_t same_align);
+WINPE_API
+void* STDCALL winpe_memload_file(const char *path, size_t *pmemsize, bool_t same_align);
 
-/*
-  load the overlay data in a pe file
-    return overlay buf, overlay size
+/**
+ * load the overlay data in a pe file
+ * @param pmemsize overlay size
+ * @return overlay buf
 */
-WINPEDEF WINPE_EXPORT
-void* STDCALL winpe_overlayload_file(const char *path, 
-    size_t *poverlaysize);
+WINPE_API 
+void* STDCALL winpe_overlayload_file(const char *path, size_t *poverlaysize);
 
-/*
-  similar to LoadlibrayA, will call dllentry
-  will load the mempe in a valid imagebase
-    return hmodule base
+/**
+ * similar to LoadlibrayA, 
+ * will load the mempe in a valid imagebase
+ * @return hmodule base
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memLoadLibrary(void *mempe);
+WINPE_API 
+void* STDCALL winpe_memLoadLibrary(void *mempe);
 
-/*
-  if imagebase==0, will load on mempe, or in imagebase
-  will load the mempe in a valid imagebase, flag as below:
-    WINPE_LDFLAG_MEMALLOC 0x1, will alloc memory to imagebase
-    WINPE_LDFLAG_MEMFIND 0x2, will find a valid space, 
-        must combined with WINPE_LDFLAG_MEMALLOC
-    return hmodule base
+/**
+ * load the mempe in a valid imagebase, will call dll entry
+ * @param imagebase if 0, will load on mempe, else in imagebase
+ * @param flag WINPE_LDFLAG_MEMALLOC 0x1, will alloc memory to imagebase
+ *             WINPE_LDFLAG_MEMFIND 0x2, will find a valid space, 
+ * @return hmodule base
 */
-WINPEDEF WINPE_EXPORT 
-INLINE void* STDCALL winpe_memLoadLibraryEx(void *mempe, 
-    size_t imagebase, DWORD flag,
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress);
+WINPE_API
+void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress);
 
-/*
-   similar to FreeLibrary, will call dllentry
-     return true or false
+/**
+ * similar to FreeLibrary, will call dll entry
+ * @return True on successful
 */
-WINPEDEF WINPE_EXPORT
-INLINE BOOL STDCALL winpe_memFreeLibrary(void *mempe);
+WINPE_API
+BOOL STDCALL winpe_memFreeLibrary(void *mempe);
 
-/*
-   FreeLibraryEx with VirtualFree custom function
-     return true or false
-*/
-WINPEDEF WINPE_EXPORT
-INLINE BOOL STDCALL winpe_memFreeLibraryEx(void *mempe, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress);
+WINPE_API
+BOOL STDCALL winpe_memFreeLibraryEx(void *mempe, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress);
 
 
-/*
-   similar to GetProcAddress
-     return function va
+/**
+ * similar to GetProcAddress
+ * @return function va
 */
-WINPEDEF WINPE_EXPORT
-INLINE PROC STDCALL winpe_memGetProcAddress(
-    void *mempe, const char *funcname);
+WINPE_API
+PROC STDCALL winpe_memGetProcAddress(void *mempe, const char *funcname);
 
-// PE query functions
-/*
-   use peb and ldr list, to obtain to find kernel32.dll address
-     return kernel32.dll address
+/**
+ * use peb and ldr list, to obtain to find kernel32.dll address
+ * @return kernel32.dll va
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* winpe_findkernel32();
+WINPE_API
+void* winpe_findkernel32();
 
-/*
-   use peb and ldr list, similar as GetModuleHandleA
-     return ldr module address
+/**
+ * use peb and ldr list, similar as GetModuleHandleA
+ * @return ldr module address
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_findmoduleaex(
-    PPEB peb, char *modulename);
+WINPE_API
+void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename);
 #define winpe_findmodulea(modulename) winpe_findmoduleaex(NULL, modulename)
 
-/*
-     return LoadLibraryA func addr
+/**
+ * @return LoadLibraryA func addr
 */
-WINPEDEF WINPE_EXPORT
-INLINE PROC winpe_findloadlibrarya();
+WINPE_API
+PROC winpe_findloadlibrarya();
 
-/*
-     return GetProcAddress func addr
+/**
+ * @return GetProcAddress func addr
 */
-WINPEDEF WINPE_EXPORT
-INLINE PROC winpe_findgetprocaddress();
+WINPE_API
+PROC winpe_findgetprocaddress();
 
-/*
-    find a valid space address start from imagebase with imagesize
-    use PFN_VirtualQuery for better use 
-      return va with imagesize
+/**
+ * find a valid space address start from imagebase with imagesize
+ * @return va
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_findspace(
+WINPE_API
+void* STDCALL winpe_findspace(
     size_t imagebase, size_t imagesize, size_t alignsize,
     PFN_VirtualQuery pfnVirtualQuery);
 
-// PE load, adjust functions
-/*
-  for overlay section in a pe file
-    return the overlay offset
+/**
+ * @return the overlay offset
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_overlayoffset(const void *rawpe);
+WINPE_API
+size_t STDCALL winpe_overlayoffset(const void *rawpe);
 
-/*
-  load the origin rawpe in memory buffer by mem align
-    return memsize
+/**
+ * load the origin rawpe in memory buffer by mem align
+ * @return memsize
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_memload(
-    const void *rawpe, size_t rawsize, 
-    void *mempe, size_t memsize, 
-    bool_t same_align);
+WINPE_API
+size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize, 
+    void *mempe, size_t memsize, bool_t same_align);
 
-/*
-  realoc the addrs for the mempe addr as image base
-  origin image base usually at 0x00400000, 0x0000000180000000
-  new image base mush be divided by 0x10000, if use loadlibrary
-    return realoc count
+/**
+ * realoc the addrs for the mempe addr as image base
+ * origin image base usually at 0x00400000, 0x0000000180000000
+ * new image base mush be divided by 0x10000, if use loadlibrary
+ * @return reloc count
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_memreloc(
-    void *mempe, size_t newimagebase);
+WINPE_API
+size_t STDCALL winpe_memreloc(void *mempe, size_t newimagebase);
 
-/*
-  load the iat for the mempe, use rvafunc for winpe_memfindexp 
-    return iat count
+/**
+ * load the iat for the mempe, use rvafunc for winpe_memfindexp
+ * @return iat count
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_membindiat(void *mempe, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress);
+WINPE_API
+size_t STDCALL winpe_membindiat(void *mempe, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress);
 
-/*
-  exec the tls callbacks for the mempe, before dll oep load
-  reason is for function PIMAGE_TLS_CALLBACK
-    return tls count
+/**
+ * exec the tls callbacks for the mempe, before dll oep load
+ * @param reason for function PIMAGE_TLS_CALLBACK
+ * @return tls count
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_membindtls(void *mempe, DWORD reason);
+WINPE_API
+size_t STDCALL winpe_membindtls(void *mempe, DWORD reason);
 
-/*
-  find the iat addres, for call [iat]
-    return target iat va
+/**
+ * find the iat addres, for call [iat]
+ * @return target iat va
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memfindiat(void *mempe, 
-    LPCSTR dllname, LPCSTR funcname);
+WINPE_API
+void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname);
 
-/*
-  find the exp  addres, the same as GetProcAddress
-  without forward to other dll
-  such as NTDLL.RtlInitializeSListHead
-    return target exp va
+/**
+ * find the exp  addres, the same as GetProcAddress, 
+ * without forward to other dll, such as NTDLL.RtlInitializeSListHead
+ * @return target exp va
 */
-WINPEDEF WINPE_EXPORT 
-INLINE void* STDCALL winpe_memfindexp(
-    void *mempe, LPCSTR funcname);
+WINPE_API
+void* STDCALL winpe_memfindexp(void *mempe, LPCSTR funcname);
 
+WINPE_API
+void* STDCALL winpe_memfindexpcrc32(void* mempe, uint32_t crc32);
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memfindexpcrc32(
-    void* mempe, uint32_t crc32);
-
-/*
-  forward the exp to the final expva
-    return the final exp va
+/**
+ * forward the exp to the final expva
+ * @return the final exp va
 */
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memforwardexp(
-    void *mempe, size_t exprva, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress);
+WINPE_API
+void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress);
 
-// PE modify function
-/* 
-  change the oep of the pe if newoeprva!=0
-    return the old oep rva
+/**
+ * change the oep of the pe if newoeprva!=0
+ * @return the old oep rva
 */
-WINPEDEF WINPE_EXPORT
-INLINE DWORD STDCALL winpe_oepval(
-    void *mempe, DWORD newoeprva);
+WINPE_API
+DWORD STDCALL winpe_oepval(void *mempe, DWORD newoeprva);
 
-/* 
-  change the imagebase of the pe if newimagebase!=0
-    return the old imagebase va
+/**
+ * change the imagebase of the pe if newimagebase!=0
+ * @return the old imagebase va
 */
-WINPEDEF WINPE_EXPORT
-INLINE size_t STDCALL winpe_imagebaseval(
-    void *mempe, size_t newimagebase);
+WINPE_API
+size_t STDCALL winpe_imagebaseval(void *mempe, size_t newimagebase);
 
-/* 
-  change the imagesize of the pe if newimagesize!=0
-    return the old imagesize
+/**
+ * change the imagesize of the pe if newimagesize!=0
+ * @return the old imagesize
 */
-WINPEDEF WINPE_EXPORT
-INLINE size_t STDCALL winpe_imagesizeval(
-    void *pe, size_t newimagesize);
+WINPE_API
+size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize);
 
-/*
-    close the aslr feature of an pe
+/**
+ * set off the aslr feature of an pe
 */
-WINPEDEF WINPE_EXPORT
-INLINE void STDCALL winpe_noaslr(void *pe);
+WINPE_API
+void STDCALL winpe_noaslr(void *pe);
 
-/* 
-  Append a section header in a pe, sect rva will be ignored
-  the mempe size must be enough for extend a section
-    return image size
+/**
+ * append a section header in a pe, sect rva will be ignored
+ * the mempe size must be enough for extend a section
+ * @return image size
 */
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_appendsecth(
-    void *mempe, PIMAGE_SECTION_HEADER psecth);
+WINPE_API
+size_t STDCALL winpe_appendsecth(void *mempe, PIMAGE_SECTION_HEADER psecth);
 
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
 
+// implement
 #ifdef WINPE_IMPLEMENTATION
-
-#ifndef _DEBUG
-#ifndef NDEBUG
-#define NDEBUG
-#endif
-#endif
-
 #if defined(__TINYC__)
 #ifdef _WIN64
 #pragma pack(8)
@@ -373,7 +362,7 @@ INLINE int _winpeinl_stricmp(const char *str1, const char *str2)
     return (int)str1[i] - (int)str2[i];
 }
 
-INLINE int _winpeinl_stricmp2(const char *str1, const wchar_t* str2)
+INLINE int _winpeinl_wcsicmp(const char *str1, const wchar_t* str2)
 {
     int i=0;
     while(str1[i]!=0 && str2[i]!=0)
@@ -424,9 +413,7 @@ INLINE void* _winpeinl_memcpy(void *dst, const void *src, size_t n)
 }
 
 // PE high order fnctions
-WINPEDEF WINPE_EXPORT 
-void* STDCALL winpe_memload_file(const char *path, 
-    size_t *pmemsize, bool_t same_align)
+void* STDCALL winpe_memload_file(const char *path, size_t *pmemsize, bool_t same_align)
 {
     FILE *fp = fopen(path, "rb");
     fseek(fp, 0, SEEK_END);
@@ -446,10 +433,8 @@ void* STDCALL winpe_memload_file(const char *path,
     free(rawpe);
     return mempe;
 }
-
-WINPEDEF WINPE_EXPORT 
-void* STDCALL winpe_overlayload_file(
-    const char *path, size_t *poverlaysize)
+ 
+void* STDCALL winpe_overlayload_file(const char *path, size_t *poverlaysize)
 {
     FILE *fp = fopen(path, "rb");
     fseek(fp, 0, SEEK_END);
@@ -474,8 +459,7 @@ void* STDCALL winpe_overlayload_file(
     return overlay;
 }
 
-WINPEDEF WINPE_EXPORT  
-INLINE void* STDCALL winpe_memLoadLibrary(void *mempe)
+void* STDCALL winpe_memLoadLibrary(void *mempe)
 {
     PFN_LoadLibraryA pfnLoadLibraryA = 
         (PFN_LoadLibraryA)winpe_findloadlibrarya();
@@ -486,11 +470,8 @@ INLINE void* STDCALL winpe_memLoadLibrary(void *mempe)
         pfnLoadLibraryA, pfnGetProcAddress);
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memLoadLibraryEx(void *mempe, 
-    size_t imagebase, DWORD flag,
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress)
+void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     // bind windows api
     char name_kernel32[] = { 'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '.', 'd', 'l', 'l' , '\0'};
@@ -562,8 +543,7 @@ INLINE void* STDCALL winpe_memLoadLibraryEx(void *mempe,
     return (void*)imagebase;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE BOOL STDCALL winpe_memFreeLibrary(void *mempe)
+BOOL STDCALL winpe_memFreeLibrary(void *mempe)
 {
     PFN_LoadLibraryA pfnLoadLibraryA = 
         (PFN_LoadLibraryA)winpe_findloadlibrarya();
@@ -573,10 +553,8 @@ INLINE BOOL STDCALL winpe_memFreeLibrary(void *mempe)
         pfnLoadLibraryA, pfnGetProcAddress);
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE BOOL STDCALL winpe_memFreeLibraryEx(void *mempe, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress)
+BOOL STDCALL winpe_memFreeLibraryEx(void *mempe, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     char name_kernel32[] = {'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '\0'};
     char name_VirtualFree[] = {'V', 'i', 'r', 't', 'u', 'a', 'l', 'F', 'r', 'e', 'e', '\0'};
@@ -590,9 +568,7 @@ INLINE BOOL STDCALL winpe_memFreeLibraryEx(void *mempe,
     return pfnVirtualFree(mempe, 0, MEM_FREE);
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE PROC STDCALL winpe_memGetProcAddress(
-    void *mempe, const char *funcname)
+PROC STDCALL winpe_memGetProcAddress(void *mempe, const char *funcname)
 {
     void* expva = winpe_memfindexp(mempe, funcname);
     size_t exprva = (size_t)((uint8_t*)expva - (uint8_t*)mempe);
@@ -602,14 +578,36 @@ INLINE PROC STDCALL winpe_memGetProcAddress(
 }
 
 // PE query functions
-WINPEDEF WINPE_EXPORT
-INLINE void* winpe_findkernel32()
+void* winpe_findkernel32()
 {
     // return (void*)LoadLibrary("kernel32.dll");
     // TEB->PEB->Ldr->InMemoryOrderLoadList->curProgram->ntdll->kernel32
     void *kerenl32 = NULL;
 
-#ifndef WINPE_NOASM
+#ifdef WINPE_NOASM
+    char name_kernel32[] = { 'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '.', 'd', 'l', 'l' , '\0' };
+    kerenl32 = winpe_findmodulea(name_kernel32);
+#else
+#if defined(__GNUC__)
+// can not use -masm=intel, as there are some ATT in intrin-impl.h
+#ifdef _WIN64
+    asm("mov %%gs:0x60, %%rax\n" // peb
+        "mov 0x18(%%rax), %%rax\n" // ldr 
+        "mov 0x20(%%rax), %%rax\n" // InMemoryOrderLoadList, currentProgramEntry
+        "mov (%%rax), %%rax\n" // ntdllEntry, currentProgramEntry->->Flink
+        "mov (%%rax), %%rax\n" // kernel32Entry,  ntdllEntry->Flink
+        "mov 0x30-0x10(%%rax), %%rax\n" // kernel32.DllBase
+        "mov %%rax, %0\n":"=m"(kerenl32));
+#else
+    asm("mov %%fs:0x30, %%eax\n" //  peb
+        "mov 0xc(%%eax), %%eax\n" //  ldr
+        "mov 0x14(%%eax), %%eax\n" //  InMemoryOrderLoadList, currentProgramEntry
+        "mov (%%eax), %%eax\n" //  ntdllEntry, currentProgramEntry->->Flink
+        "mov (%%eax), %%eax\n" //  kernel32Entry,  ntdllEntry->Flink
+        "mov -0x8+0x18(%%eax), %%eax\n" //  kernel32.DllBase
+        "mov %%eax, %0\n":"=m"(kerenl32));
+#endif // _WIN64
+#else
 #ifdef _WIN64
     __asm{
         mov rax, gs:[60h]; peb
@@ -630,18 +628,13 @@ INLINE void* winpe_findkernel32()
         mov eax, [eax - 8h +18h]; kernel32.DllBase
         mov kerenl32, eax;
     }
-#endif
-#else
-    char name_kernel32[] = { 'k', 'e', 'r', 'n', 'e', 'l', '3', '2', '.', 'd', 'l', 'l' , '\0' };
-    kerenl32 = winpe_findmodulea(name_kernel32);
-#endif
-
+#endif // _WIN64
+#endif // __GNUC__
+#endif // WINPE_NOASM
     return kerenl32;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_findmoduleaex(
-    PPEB peb, char *modulename)
+void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename)
 {
     typedef struct _LDR_ENTRY  // has 3 kinds of pointer link list
     {
@@ -702,7 +695,7 @@ INLINE void* STDCALL winpe_findmoduleaex(
         int i;
         for(i=ustr->Length/2-1; i>0 && ustr->Buffer[i]!='\\';i--);
         if(ustr->Buffer[i]=='\\') i++;
-        if(_winpeinl_stricmp2(modulename,  ustr->Buffer + i)==0)
+        if(_winpeinl_wcsicmp(modulename,  ustr->Buffer + i)==0)
         {
             return ldrentry->DllBase;
         }
@@ -712,8 +705,7 @@ INLINE void* STDCALL winpe_findmoduleaex(
     return NULL;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE PROC winpe_findloadlibrarya()
+PROC winpe_findloadlibrarya()
 {
     // return (PROC)LoadLibraryA;
     HMODULE hmod_kernel32 = (HMODULE)winpe_findkernel32();
@@ -722,8 +714,7 @@ INLINE PROC winpe_findloadlibrarya()
         (void*)hmod_kernel32, name_LoadLibraryA);
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE PROC winpe_findgetprocaddress()
+PROC winpe_findgetprocaddress()
 {
     // return (PROC)GetProcAddress;
     HMODULE hmod_kernel32 = (HMODULE)winpe_findkernel32();
@@ -731,8 +722,7 @@ INLINE PROC winpe_findgetprocaddress()
     return (PROC)winpe_memfindexp(hmod_kernel32, name_GetProcAddress);
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_findspace(
+void* STDCALL winpe_findspace(
     size_t imagebase, size_t imagesize, size_t alignsize, 
     PFN_VirtualQuery pfnVirtualQuery)
 {
@@ -754,8 +744,7 @@ INLINE void* STDCALL winpe_findspace(
 }
 
 // PE load, adjust functions
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_overlayoffset(const void *rawpe)
+size_t STDCALL winpe_overlayoffset(const void *rawpe)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)rawpe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -771,11 +760,8 @@ INLINE size_t STDCALL winpe_overlayoffset(const void *rawpe)
            pSectHeader[sectNum-1].SizeOfRawData;
 }
 
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_memload(
-    const void *rawpe, size_t rawsize, 
-    void *mempe, size_t memsize, 
-    bool_t same_align)
+size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize, 
+    void *mempe, size_t memsize, bool_t same_align)
 {
     // load rawpe to memalign
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)rawpe;
@@ -821,9 +807,7 @@ INLINE size_t STDCALL winpe_memload(
     return imagesize;
 }
 
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_memreloc(
-    void *mempe, size_t newimagebase)
+size_t STDCALL winpe_memreloc(void *mempe, size_t newimagebase)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -863,11 +847,9 @@ INLINE size_t STDCALL winpe_memreloc(
     pOptHeader->ImageBase = newimagebase;
 	return reloc_count;
 }
-
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_membindiat(void *mempe, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress)
+ 
+size_t STDCALL winpe_membindiat(void *mempe, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -945,11 +927,10 @@ INLINE size_t STDCALL winpe_membindiat(void *mempe,
     return iat_count;
 }
 
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_membindtls(void *mempe, DWORD reason)
+size_t STDCALL winpe_membindtls(void *mempe, DWORD reason)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
-    PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
+    PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)
         ((uint8_t*)mempe + pDosHeader->e_lfanew);
     PIMAGE_FILE_HEADER pFileHeader = &pNtHeader->FileHeader;
     PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
@@ -975,9 +956,7 @@ INLINE size_t STDCALL winpe_membindtls(void *mempe, DWORD reason)
     return tls_count;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memfindiat(void *mempe, 
-    LPCSTR dllname, LPCSTR funcname)
+void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1025,9 +1004,7 @@ INLINE void* STDCALL winpe_memfindiat(void *mempe,
     return 0;
 }
 
-WINPEDEF WINPE_EXPORT 
-INLINE void* STDCALL winpe_memfindexp(
-    void *mempe, LPCSTR funcname)
+void* STDCALL winpe_memfindexp(void *mempe, LPCSTR funcname)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1066,9 +1043,7 @@ INLINE void* STDCALL winpe_memfindexp(
     return NULL;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memfindexpcrc32(
-    void* mempe, uint32_t crc32)
+void* STDCALL winpe_memfindexpcrc32(void* mempe, uint32_t crc32)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)mempe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1098,11 +1073,8 @@ INLINE void* STDCALL winpe_memfindexpcrc32(
     return NULL;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE void* STDCALL winpe_memforwardexp(
-    void *mempe, size_t exprva, 
-    PFN_LoadLibraryA pfnLoadLibraryA, 
-    PFN_GetProcAddress pfnGetProcAddress)
+void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva, 
+    PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     // this function might have infinite loop
     // such as this situation
@@ -1157,8 +1129,7 @@ INLINE void* STDCALL winpe_memforwardexp(
 }
 
 // PE setting function
-WINPEDEF WINPE_EXPORT
-INLINE void STDCALL winpe_noaslr(void *pe)
+void STDCALL winpe_noaslr(void *pe)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1171,8 +1142,7 @@ INLINE void STDCALL winpe_noaslr(void *pe)
     pOptHeader->DllCharacteristics &= ~IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE DWORD STDCALL winpe_oepval(void *pe, DWORD newoeprva)
+DWORD STDCALL winpe_oepval(void *pe, DWORD newoeprva)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1184,8 +1154,7 @@ INLINE DWORD STDCALL winpe_oepval(void *pe, DWORD newoeprva)
     return orgoep;
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE size_t STDCALL winpe_imagebaseval(void *pe, size_t newimagebase)
+size_t STDCALL winpe_imagebaseval(void *pe, size_t newimagebase)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1197,8 +1166,7 @@ INLINE size_t STDCALL winpe_imagebaseval(void *pe, size_t newimagebase)
     return imagebase; 
 }
 
-WINPEDEF WINPE_EXPORT
-INLINE size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize)
+size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1210,9 +1178,7 @@ INLINE size_t STDCALL winpe_imagesizeval(void *pe, size_t newimagesize)
     return imagesize; 
 }
 
-WINPEDEF WINPE_EXPORT 
-INLINE size_t STDCALL winpe_appendsecth(void *pe, 
-    PIMAGE_SECTION_HEADER psecth)
+size_t STDCALL winpe_appendsecth(void *pe, PIMAGE_SECTION_HEADER psecth)
 {
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pe;
     PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)
@@ -1252,8 +1218,8 @@ INLINE size_t STDCALL winpe_appendsecth(void *pe,
     return pOptHeader->SizeOfImage;
 }
 
-#endif
-#endif
+#endif // WINPE_IMPLEMENTATION
+#endif // _WINPE_H
 
 /*
 history:
@@ -1268,4 +1234,5 @@ v0.3.2, x64 memory load support, winpe_findkernel32, winpe_finmodule by asm
 v0.3.3, add ordinal support in winpe_membindiat, add win_membindtls, change all call to STDCALL
 v0.3.4, add WINPE_NOASM to make compatible for vs x64
 v0.3.5, add winpe_memfindexpcrc32
+v0.3.6, add AT&T format asm for gcc, improve macro style and comment
 */

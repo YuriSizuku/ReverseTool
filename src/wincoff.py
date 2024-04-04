@@ -9,7 +9,7 @@ import struct
 import codecs
 from typing import Union, List, Dict
 
-LIBSHELLCODE_VERSION = 100
+__version__ = 110
 
 class coff_filehdr_t(struct.Struct):
     def __init__(self, data):

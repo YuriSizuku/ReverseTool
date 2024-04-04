@@ -1,6 +1,6 @@
 #define WINPE_SHARED
-#define WINPE_IMPLEMENTATION
-#ifdef _WIN64
+#if defined(__TINYC__) || (defined(_MSC_VER) && defined(_WIN64))
 #define WINPE_NOASM
 #endif
+#define WINPE_IMPLEMENTATION
 #include "winpe.h"

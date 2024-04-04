@@ -1,98 +1,56 @@
-# main config
-LIBPREFIX?=./../../
-ARCH?=i686
-PREFIX?=./build
+# build example
+# make libwinpe libwinpe_test CC=gcc BUILD=32d 
+# make libwinpe libwinpe_test CC=gcc BUILD=64d
 
-CC:=clang
-INCS:=-I$(LIBPREFIX)src/
-LIBDIRS:=
+# general config
+CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
+BUILD:=32# 32, 32d, 64, 64d
+BUILD_DIR:=build
+INCS:=-I../../src
 LIBS:=-luser32 -lgdi32 -lpsapi
-CFLAGS:=-ffunction-sections\
-	-fdata-sections -std=c99
-LDFLAGS:=
+CFLAGS:=-fPIC -std=gnu99 \
+	-fvisibility=hidden \
+	-ffunction-sections -fdata-sections
+LDFLAGS:=-Wl,--enable-stdcall-fixup \
+		 -Wl,--kill-at \
+		 -Wl,--gc-sections
 
-# arch config
-ifeq ($(ARCH), x86_64) 
-ARCH_POSTFIX:=64
-LIBDIRS+=-L$(LIBPREFIX)lib64
-CFLAGS+=-D_WIN64
-ifdef DEBUG
-BUILD_POSTFIX:=64d
+# build config
+ifneq (,$(findstring 64, $(BUILD)))
+CFLAGS+=-m64
 else
-BUILD_POSTFIX:=64
-endif 
-else # x86
-ARCH_POSTFIX:=32
-LIBDIRS+=-L$(LIBPREFIX)lib32
-ifdef DEBUG
-BUILD_POSTFIX:=32d
-else
-BUILD_POSTFIX:=32
-endif 
+CFLAGS+=-m32
 endif
-
-# compiler config
-ifneq (,$(findstring clang, $(CC)))
-CFLAGS+=-target $(ARCH)-pc-windows-msvc \
-	-D_CRT_SECURE_NO_DEPRECATE 
-LDFLAGS+= -Wl,/OPT:REF\
-    -Wl,/DEF:src/libwinpe.def\
-	-Wno-undefined-inline
-else  # mingw 
-CFLAGS+=-m$(ARCH_POSTFIX) \
-	-fPIC\
-	-fvisibility=hidden\
-	-fgnu89-inline\
-	-DWINPE_NOASM 
-ifneq (,$(findstring gcc, $(CC)))
-LDFLAGS+=-lwinpthread \
-	-static-libgcc \
-	-static-libstdc++ \
-	-Wl,-Bstatic,--whole-archive \
-	-Wl,--no-whole-archive\
-	-Wl,--gc-sections\
-	-Wl,--enable-stdcall-fixup\
-	-Wl,--kill-at
-endif
-endif
-
-# optimization config
-ifdef DEBUG
+ifneq (,$(findstring d, $(BUILD)))
 CFLAGS+=-g -D_DEBUG
 else
 CFLAGS+=-Os
-endif 
-LIBDIRS+=-L$(PREFIX) 
-
-# system config
-ifeq ($(shell echo ${OS}), Windows_NT)
-DLL_EXT=.dll
-EXE_EXT=.exe
+endif
+ifneq (,$(findstring tcc, $(CC)))
+LDFLAGS= # tcc can not remove at at stdcall in i686
 else
-DLL_EXT?=.so
-EXE_EXT?=
 endif
 
-# other config
-ifneq (,$(findstring clang, $(CC)))
-else
-ifneq (,$(findstring gcc, $(CC)))
-endif
-endif
-
-all: prepare\
-	libwinpe
+all: prepare libwinpe
 
 clean:
-	rm -rf $(PREFIX)/*libwinpe*
+	@rm -rf $(BUILD_DIR)/*libwinpe*
 
 prepare:
-	@if ! [ -d $(PREFIX) ]; then mkdir -p $(PREFIX); fi
+	@if ! [ -d $(BUILD_DIR) ]; then mkdir -p $(BUILD_DIR); fi
 
-libwinpe: src\libwinpe.c
-	@echo \#\#building $@ ...
-	$(CC) -shared $< \
-		-o $(PREFIX)/$@$(BUILD_POSTFIX)$(DLL_EXT) \
-		$(CFLAGS) $(LDFLAGS) $(INCS) $(LIBS) $(LIBDIRS)
+libwinpe: src/libwinpe.c
+	@echo "## $@"
+	$(CC) -shared $^ -o $(BUILD_DIR)/$@$(BUILD).dll \
+		$(INCS) $(LIBS) \
+		$(CFLAGS) $(LDFLAGS)
 
-.PHONY: all clean prepare libwinpe
+# can not use tcc here
+libwinpe_test: src/libwinpe_test.c
+	@echo "## $@"
+	$(CC) $< -o $(BUILD_DIR)/$@$(BUILD).exe \
+		-L$(BUILD_DIR) -lwinpe$(BUILD) \
+		$(INCS) $(LIBS) \
+		$(CFLAGS) $(LDFLAGS)
+
+.PHONY: all clean prepare libwinpe libwinpe_test

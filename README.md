@@ -3,7 +3,7 @@
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/yurisizuku/reversetool?color=green&label=ReverseTool)![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/YuriSizuku/ReverseTool/build_wintools.yml?label=build_wintools)  
 
 This repo contains some libraries for my reverse projects.  
-The building example is in `project`,  support for `Makefile` for `tcc`, `gcc` and `clang`.  
+The building example is in `project`,  support for `Makefile` for `tcc`, `gcc` and `msvc`.  
 
 Scripts for localization are moved to [LocalizationTool](https://github.com/YuriSizuku/LocalizationTool).  
 
