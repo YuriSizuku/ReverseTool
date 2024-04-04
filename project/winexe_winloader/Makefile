@@ -1,97 +1,54 @@
-# main config
-LIBPREFIX?=./../../
-ARCH?=i686
-PREFIX?=./build
+# build example
+# make winloader CC=i686-w64-mingw32-gcc WINDRES=i686-w64-mingw32-windres BUILD_TYPE=32d 
+# make winloader CC=x86_64-w64-mingw32-gcc WINDRES=x86_64-w64-mingw32-windres BUILD_TYPE=64d
 
-CC:=clang
-INCS:=-I$(LIBPREFIX)src
-LIBDIRS:=
+# general config
+CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
+WINDRES:=windres
+BUILD_TYPE:=32# 32, 32d, 64, 64d
+BUILD_DIR:=build
+INCS:=-I../../src
 LIBS:=-luser32 -lgdi32 -lpsapi
-CFLAGS:=-ffunction-sections\
-	-fdata-sections -std=c99
-LDFLAGS:=
+CFLAGS:=-fPIC -std=c99 \
+	-fvisibility=hidden \
+	-ffunction-sections -fdata-sections
+LDFLAGS:=-Wl,--enable-stdcall-fixup \
+		 -Wl,--kill-at \
+		 -Wl,--gc-sections
 
-# arch config
-ifeq ($(ARCH), x86_64) 
-ARCH_POSTFIX:=64
-LIBDIRS+=-L$(LIBPREFIX)lib64
-CFLAGS+=-D_WIN64
-ifdef DEBUG
-BUILD_POSTFIX:=64d
+# build config
+ifneq (,$(findstring 64, $(BUILD_TYPE)))
+CFLAGS+=-m64
+ARCH_WINDRES=pe-x86-64
 else
-BUILD_POSTFIX:=64
-endif 
-else # x86
-ARCH_POSTFIX:=32
-LIBDIRS+=-L$(LIBPREFIX)lib32
-ifdef DEBUG
-BUILD_POSTFIX:=32d
-else
-BUILD_POSTFIX:=32
-endif 
+CFLAGS+=-m32
+ARCH_WINDRES=pe-i386
 endif
-
-# compiler config
-ifneq (,$(findstring clang, $(CC)))
-CFLAGS+=-target $(ARCH)-pc-windows-msvc \
-	-D_CRT_SECURE_NO_DEPRECATE 
-LDFLAGS+= -Wl,/OPT:REF\
-	-Wno-undefined-inline
-else  # mingw 
-CFLAGS+=-m$(ARCH_POSTFIX) \
-	-fPIC\
-	-fvisibility=hidden\
-	-fgnu89-inline\
-	-DWINPE_NOASM 
-ifneq (,$(findstring gcc, $(CC)))
-LDFLAGS+=-lwinpthread \
-	-static-libgcc \
-	-static-libstdc++ \
-	-Wl,-Bstatic,--whole-archive \
-	-Wl,--no-whole-archive\
-	-Wl,--gc-sections\
-	-Wl,--enable-stdcall-fixup\
-	-Wl,--kill-at
-endif
-endif
-
-# optimization config
-ifdef DEBUG
+ifneq (,$(findstring d, $(BUILD_TYPE)))
 CFLAGS+=-g -D_DEBUG
 else
 CFLAGS+=-Os
-endif 
-LIBDIRS+=-L$(PREFIX) 
-
-# system config
-ifeq ($(shell echo ${OS}), Windows_NT)
-DLL_EXT=.dll
-EXE_EXT=.exe
+endif
+ifneq (,$(findstring tcc, $(CC)))
+LDFLAGS= # tcc can not remove at at stdcall in i686
 else
-DLL_EXT?=.so
-EXE_EXT?=
 endif
 
-# other config
-ifneq (,$(findstring clang, $(CC)))
-else
-ifneq (,$(findstring gcc, $(CC)))
-endif
-endif
-
-all: prepare\
-	winloader
+all: prepare winloader
 
 clean:
-	rm -rf $(PREFIX)/*winloader*
+	@rm -rf $(BUILD_DIR)/*winloader*
 
 prepare:
-	@if ! [ -d $(PREFIX) ]; then mkdir -p $(PREFIX); fi
+	@if ! [ -d $(BUILD_DIR) ]; then mkdir -p $(BUILD_DIR); fi
 
-winloader: src\winloader.c
-	@echo \#\#building $@ ...
-	$(CC) $< \
-		-o $(PREFIX)/$@$(BUILD_POSTFIX)$(EXE_EXT) \
-		$(CFLAGS) $(LDFLAGS) $(INCS) $(LIBS) $(LIBDIRS)
+$(BUILD_DIR)/winloader$(BUILD_TYPE).res: src/winloader.rc
+	$(WINDRES) $< -F $(ARCH_WINDRES) -O coff -o $@
+
+winloader: src/winloader.c $(BUILD_DIR)/winloader$(BUILD_TYPE).res
+	@echo "## $@"
+	$(CC) $^ -o $(BUILD_DIR)/$@$(BUILD_TYPE).exe \
+		$(INCS) $(LIBS) \
+		$(CFLAGS) $(LDFLAGS) 
 
 .PHONY: all clean prepare winloader

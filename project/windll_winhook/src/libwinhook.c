@@ -1,5 +1,5 @@
 #define WINHOOK_IMPLEMENTATION
 #define WINHOOK_SHARED
-#define WINHOOK_USESHELLCODE
+#define WINHOOK_USEDYNBIND
 #define WINHOOK_NO3RDLIB
 #include "winhook.h"

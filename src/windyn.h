@@ -41,6 +41,12 @@
 #define EXPORT __attribute__((visibility("default")))
 #endif
 #endif // _MSC_VER
+#if defined(__TINYC__) // fix tcc not support inline
+#ifdef INLINE
+#undef INLINE
+#endif
+#define INLINE
+#endif
 
 // define specific macro
 #ifdef WINDYN_API

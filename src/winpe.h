@@ -56,6 +56,12 @@
 #ifdef WINPE_API_INLINE
 #undef WINPE_API_INLINE
 #endif
+#if defined(__TINYC__) // fix tcc not support inline
+#ifdef INLINE
+#undef INLINE
+#endif
+#define INLINE
+#endif
 
 #ifdef WINPE_STATIC
 #define WINPE_API_DEF static
