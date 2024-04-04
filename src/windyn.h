@@ -1,46 +1,84 @@
-/*
-windows api function pointer define,
-functions or macros for dynamic bindings
-    v0.1.3, developed by devseed
+/** windows api function pointer define,
+ *  functions or macros for dynamic bindings
+ *    v0.1.4, developed by devseed
+ * 
+ * macros:
+ *    WINDYN_IMPLEMENT, include defines of each function
+ *    WINDYN_SHARED, make function export
+ *    WINDYN_STATIC, make function static
+ *    WINDYN_NOINLINE, don't use inline function
 */
 
 #ifndef _WINDYN_H
 #define _WINDYN_H
-#define WINDYN_VERSION 130
+#define WINDYN_VERSION 140
 
-#include <windows.h>
-#include <winternl.h>
-#include <tlhelp32.h>
-
-#ifndef WINDYNDEF
-#ifdef WINDYN_STATIC
-#define WINDYNDEF static
-#else
-#define WINDYNDEF extern
+// define general macro
+#if defined(_MSC_VER) || defined(__TINYC__)
+#ifndef STDCALL
+#define STDCALL __stdcall
 #endif
+#ifndef NAKED
+#define NAKED __declspec(naked)
 #endif
-
-#ifndef WINDYN_SHARED
-#define WINDYN_EXPORT
-#else
-#ifdef _WIN32
-#define WINDYN_EXPORT __declspec(dllexport)
-#else
-#define WINDYN_EXPORT __attribute__((visibility("default")))
-#endif
-#endif
-
 #ifndef INLINE
-#if defined(_MSC_VER)
 #define INLINE __forceinline
-#else  // tcc, gcc not support inline export ...
-#define INLINE
 #endif
+#ifndef EXPORT
+#define EXPORT __declspec(dllexport)
 #endif
+#else
+#ifndef STDCALL
+#define STDCALL __attribute__((stdcall))
+#endif
+#ifndef NAKED
+#define NAKED __attribute__((naked))
+#endif
+#ifndef INLINE
+#define INLINE __attribute__((always_inline)) inline
+#endif
+#ifndef EXPORT 
+#define EXPORT __attribute__((visibility("default")))
+#endif
+#endif // _MSC_VER
+
+// define specific macro
+#ifdef WINDYN_API
+#undef WINDYN_API
+#endif
+#ifdef WINDYN_API_DEF
+#undef WINDYN_API_DEF
+#endif
+#ifdef WINDYN_API_EXPORT
+#undef WINDYN_API_EXPORT
+#endif
+#ifdef WINDYN_API_INLINE
+#undef WINDYN_API_INLINE
+#endif
+#ifdef WINDYN_STATIC
+#define WINDYN_API_DEF static
+#else
+#define WINDYN_API_DEF extern
+#endif // WINDYN_STATIC
+#ifdef WINDYN_SHARED
+#define WINDYN_API_EXPORT EXPORT
+#else
+#define WINDYN_API_EXPORT
+#endif // WINDYN_SHARED
+#ifdef WINDYN_NOINLINE
+#define WINDYN_API_INLINE
+#else
+#define WINDYN_API_INLINE INLINE
+#endif // WINDYN_NOINLINE
+#define WINDYN_API WINDYN_API_DEF WINDYN_API_EXPORT WINDYN_API_INLINE
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <windows.h>
+#include <winternl.h>
+#include <tlhelp32.h>
 
 // function pointer declear
 typedef HMODULE (WINAPI* PFN_LoadLibraryA)(
@@ -303,69 +341,63 @@ typedef NTSTATUS (NTAPI * PFN_NtQueryInformationProcess)(
 }
 
 // stdc inline functions declear
-WINDYNDEF WINDYN_EXPORT
+WINDYN_API
 int windyn_strlen(const char* str1);
 
-WINDYNDEF WINDYN_EXPORT
+WINDYN_API
 int windyn_stricmp(const char* str1, const char* str2);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE int windyn_stricmp2(const char* str1, const wchar_t* str2);
+WINDYN_API
+int windyn_stricmp2(const char* str1, const wchar_t* str2);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE int windyn_wcsicmp(const wchar_t* str1, const wchar_t* str2);
+WINDYN_API
+int windyn_wcsicmp(const wchar_t* str1, const wchar_t* str2);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE void* windyn_memset(void* buf, int ch, size_t n);
+WINDYN_API
+void* windyn_memset(void* buf, int ch, size_t n);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE void* windyn_memcpy(void* dst, const void* src, size_t n);
+WINDYN_API
+void* windyn_memcpy(void* dst, const void* src, size_t n);
 
 // winapi inline functions declear
-WINDYNDEF WINDYN_EXPORT
-INLINE HMODULE WINAPI windyn_GetModuleHandleA(
-    LPCSTR lpModuleName
-);
+WINDYN_API
+HMODULE WINAPI windyn_GetModuleHandleA(
+    LPCSTR lpModuleName);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE HMODULE WINAPI windyn_LoadLibraryA(
-    LPCSTR lpLibFileName
-);
+WINDYN_API
+HMODULE WINAPI windyn_LoadLibraryA(
+    LPCSTR lpLibFileName);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE FARPROC WINAPI windyn_GetProcAddress(
+WINDYN_API
+FARPROC WINAPI windyn_GetProcAddress(
     HMODULE hModule,
-    LPCSTR lpProcName
-);
+    LPCSTR lpProcName);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE LPVOID WINAPI windyn_VirtualAllocEx(
+WINDYN_API
+LPVOID WINAPI windyn_VirtualAllocEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
     DWORD flAllocationType,
-    DWORD flProtect
-);
+    DWORD flProtect);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_VirtualFreeEx(
+WINDYN_API
+BOOL WINAPI windyn_VirtualFreeEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
-    DWORD dwFreeType
-);
+    DWORD dwFreeType);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_VirtualProtectEx(
+WINDYN_API
+BOOL WINAPI windyn_VirtualProtectEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
     DWORD flNewProtect,
-    PDWORD lpflOldProtect
-);
+    PDWORD lpflOldProtect);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_CreateProcessA(
+WINDYN_API
+BOOL WINAPI windyn_CreateProcessA(
     LPCSTR lpApplicationName,
     LPSTR lpCommandLine,
     LPSECURITY_ATTRIBUTES lpProcessAttributes,
@@ -375,105 +407,89 @@ INLINE BOOL WINAPI windyn_CreateProcessA(
     LPVOID lpEnvironment,
     LPCSTR lpCurrentDirectory,
     LPSTARTUPINFOA lpStartupInfo,
-    LPPROCESS_INFORMATION lpProcessInformation
-);
+    LPPROCESS_INFORMATION lpProcessInformation);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_OpenProcess(
+WINDYN_API
+HANDLE WINAPI windyn_OpenProcess(
     DWORD dwDesiredAccess,
     BOOL bInheritHandle,
-    DWORD dwProcessId
-);
+    DWORD dwProcessId);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_GetCurrentProcess(
-    VOID
-);
+WINDYN_API
+HANDLE WINAPI windyn_GetCurrentProcess(
+    VOID);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_ReadProcessMemory(
+WINDYN_API
+BOOL WINAPI windyn_ReadProcessMemory(
     HANDLE hProcess,
     LPCVOID lpBaseAddress,
     LPVOID lpBuffer,
     SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesRead
-);
+    SIZE_T* lpNumberOfBytesRead);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_WriteProcessMemory(
+WINDYN_API
+BOOL WINAPI windyn_WriteProcessMemory(
     HANDLE hProcess,
     LPVOID lpBaseAddress,
     LPCVOID lpBuffer,
     SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesWritten
-);
+    SIZE_T* lpNumberOfBytesWritten);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_CreateRemoteThread(
+WINDYN_API 
+HANDLE WINAPI windyn_CreateRemoteThread(
     HANDLE hProcess,
     LPSECURITY_ATTRIBUTES lpThreadAttributes,
     SIZE_T dwStackSize,
     LPTHREAD_START_ROUTINE lpStartAddress,
     LPVOID lpParameter,
     DWORD dwCreationFlags,
-    LPDWORD lpThreadId
-);
+    LPDWORD lpThreadId);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE HANDLE WINAPI windyn_GetCurrentThread(
-    VOID
-);
+WINDYN_API
+HANDLE WINAPI windyn_GetCurrentThread(
+    VOID);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE DWORD WINAPI windyn_SuspendThread(
-    HANDLE hThread
-);
+WINDYN_API
+DWORD WINAPI windyn_SuspendThread(
+    HANDLE hThread);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE DWORD WINAPI windyn_ResumeThread(
-    HANDLE hThread
-);
+WINDYN_API
+DWORD WINAPI windyn_ResumeThread(
+    HANDLE hThread);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE BOOL WINAPI windyn_GetThreadContext(
+WINDYN_API
+BOOL WINAPI windyn_GetThreadContext(
     HANDLE hThread,
-    LPCONTEXT lpContext
-);
+    LPCONTEXT lpContext);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE BOOL WINAPI windyn_SetThreadContext(
+WINDYN_API
+BOOL WINAPI windyn_SetThreadContext(
     HANDLE hThread,
-    CONST CONTEXT* lpContext
-);
+    CONST CONTEXT* lpContext);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE DWORD WINAPI windyn_WaitForSingleObject(
+WINDYN_API
+DWORD WINAPI windyn_WaitForSingleObject(
     HANDLE hHandle,
-    DWORD dwMilliseconds
-);
+    DWORD dwMilliseconds);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE BOOL WINAPI windyn_CloseHandle(
-    HANDLE hObject
-);
+WINDYN_API
+BOOL WINAPI windyn_CloseHandle(
+    HANDLE hObject);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE HANDLE WINAPI windyn_CreateToolhelp32Snapshot(
+WINDYN_API
+HANDLE WINAPI windyn_CreateToolhelp32Snapshot(
     DWORD dwFlags,
-    DWORD th32ProcessID
-);
+    DWORD th32ProcessID);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE BOOL WINAPI windyn_Process32First(
+WINDYN_API
+BOOL WINAPI windyn_Process32First(
     HANDLE hSnapshot,
-    LPPROCESSENTRY32 lppe
-);
+    LPPROCESSENTRY32 lppe);
 
-WINDYNDEF WINDYN_EXPORT
-INLINE BOOL WINAPI windyn_Process32Next(
+WINDYN_API
+BOOL WINAPI windyn_Process32Next(
     HANDLE hSnapshot,
-    LPPROCESSENTRY32 lppe
-);
+    LPPROCESSENTRY32 lppe);
 
 #ifdef WINDYN_IMPLEMENTATION
 #include <windows.h>
@@ -481,15 +497,14 @@ INLINE BOOL WINAPI windyn_Process32Next(
 // util functions
 
 // stdc inline functions define
-INLINE int windyn_strlen(const char* str1)
+int windyn_strlen(const char* str1)
 {
     const char* p = str1;
     while (*p) p++;
     return (int)(p - str1);
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE int windyn_stricmp(const char* str1, const char* str2)
+int windyn_stricmp(const char* str1, const char* str2)
 {
     int i = 0;
     while (str1[i] != 0 && str2[i] != 0)
@@ -508,8 +523,7 @@ INLINE int windyn_stricmp(const char* str1, const char* str2)
     return (int)str1[i] - (int)str2[i];
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE int windyn_stricmp2(const char* str1, const wchar_t* str2)
+int windyn_stricmp2(const char* str1, const wchar_t* str2)
 {
     int i = 0;
     while (str1[i] != 0 && str2[i] != 0)
@@ -528,8 +542,7 @@ INLINE int windyn_stricmp2(const char* str1, const wchar_t* str2)
     return (int)str1[i] - (int)str2[i];
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE int windyn_wcsicmp(const wchar_t * str1, const wchar_t* str2)
+int windyn_wcsicmp(const wchar_t * str1, const wchar_t* str2)
 {
     int i = 0;
     while (str1[i] != 0 && str2[i] != 0)
@@ -548,16 +561,14 @@ INLINE int windyn_wcsicmp(const wchar_t * str1, const wchar_t* str2)
     return (int)str1[i] - (int)str2[i];
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE void* windyn_memset(void* buf, int ch, size_t n)
+void* windyn_memset(void* buf, int ch, size_t n)
 {
     char* p = buf;
     for (size_t i = 0; i < n; i++) p[i] = (char)ch;
     return buf;
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE void* windyn_memcpy(void* dst, const void* src, size_t n)
+void* windyn_memcpy(void* dst, const void* src, size_t n)
 {
     char* p1 = (char*)dst;
     char* p2 = (char*)src;
@@ -566,10 +577,8 @@ INLINE void* windyn_memcpy(void* dst, const void* src, size_t n)
 }
 
 // winapi inline functions define
-WINDYNDEF WINDYN_EXPORT
-INLINE HMODULE WINAPI windyn_GetModuleHandleA(
-    LPCSTR lpModuleName
-)
+HMODULE WINAPI windyn_GetModuleHandleA(
+    LPCSTR lpModuleName)
 {
     PPEB peb = NULL;
     HMODULE hmod = NULL;
@@ -577,10 +586,8 @@ INLINE HMODULE WINAPI windyn_GetModuleHandleA(
     return hmod;
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE HMODULE WINAPI windyn_LoadLibraryA(
-    LPCSTR lpLibFileName
-)
+HMODULE WINAPI windyn_LoadLibraryA(
+    LPCSTR lpLibFileName)
 {
     HMODULE kernel32 = NULL;
     WINDYN_FINDKERNEL32(kernel32);
@@ -589,11 +596,9 @@ INLINE HMODULE WINAPI windyn_LoadLibraryA(
     return pfnLoadLibraryA(lpLibFileName);
 }
 
-WINDYNDEF WINDYN_EXPORT
-INLINE FARPROC WINAPI windyn_GetProcAddress(
+FARPROC WINAPI windyn_GetProcAddress(
     HMODULE hModule,
-    LPCSTR lpProcName
-)
+    LPCSTR lpProcName)
 {
     HMODULE kernel32 = NULL;
     WINDYN_FINDKERNEL32(kernel32);
@@ -602,45 +607,37 @@ INLINE FARPROC WINAPI windyn_GetProcAddress(
     return pfnGetProcAddress(hModule, lpProcName);
 }
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE LPVOID WINAPI windyn_VirtualAllocEx(
+LPVOID WINAPI windyn_VirtualAllocEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
     DWORD flAllocationType,
-    DWORD flProtect
-)
+    DWORD flProtect)
 {    
     HMODULE kernel32 = NULL;
     WINDYN_FINDKERNEL32(kernel32);
     PFN_GetProcAddress pfnGetProcAddress = NULL;
     WINDYN_FINDGETPROCADDRESS(kernel32, pfnGetProcAddress);
-
     char name_VirtualAllocEx[] = { 'V', 'i', 'r', 't', 'u', 'a', 'l', 'A', 'l', 'l', 'o', 'c', 'E', 'x', '\0'};
-    PFN_VirtualAllocEx pfnVirtualAllocEx = (PFN_VirtualAllocEx)
-        pfnGetProcAddress(kernel32, name_VirtualAllocEx);
+    PFN_VirtualAllocEx pfnVirtualAllocEx = (PFN_VirtualAllocEx)pfnGetProcAddress(kernel32, name_VirtualAllocEx);
     return pfnVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
 }
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_VirtualFreeEx(
+// todo
+BOOL WINAPI windyn_VirtualFreeEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
-    DWORD dwFreeType
-);
+    DWORD dwFreeType);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_VirtualProtectEx(
+BOOL WINAPI windyn_VirtualProtectEx(
     HANDLE hProcess,
     LPVOID lpAddress,
     SIZE_T dwSize,
     DWORD flNewProtect,
-    PDWORD lpflOldProtect
-);
+    PDWORD lpflOldProtect);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_CreateProcessA(
+BOOL WINAPI windyn_CreateProcessA(
     LPCSTR lpApplicationName,
     LPSTR lpCommandLine,
     LPSECURITY_ATTRIBUTES lpProcessAttributes,
@@ -650,105 +647,74 @@ INLINE BOOL WINAPI windyn_CreateProcessA(
     LPVOID lpEnvironment,
     LPCSTR lpCurrentDirectory,
     LPSTARTUPINFOA lpStartupInfo,
-    LPPROCESS_INFORMATION lpProcessInformation
-);
+    LPPROCESS_INFORMATION lpProcessInformation);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_OpenProcess(
+HANDLE WINAPI windyn_OpenProcess(
     DWORD dwDesiredAccess,
     BOOL bInheritHandle,
-    DWORD dwProcessId
-);
+    DWORD dwProcessId);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_GetCurrentProcess(
-    VOID
-);
+HANDLE WINAPI windyn_GetCurrentProcess(
+    VOID);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_ReadProcessMemory(
+BOOL WINAPI windyn_ReadProcessMemory(
     HANDLE hProcess,
     LPCVOID lpBaseAddress,
     LPVOID lpBuffer,
     SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesRead
-);
+    SIZE_T* lpNumberOfBytesRead);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_WriteProcessMemory(
+BOOL WINAPI windyn_WriteProcessMemory(
     HANDLE hProcess,
     LPVOID lpBaseAddress,
     LPCVOID lpBuffer,
     SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesWritten
-);
+    SIZE_T* lpNumberOfBytesWritten);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_CreateRemoteThread(
+HANDLE WINAPI windyn_CreateRemoteThread(
     HANDLE hProcess,
     LPSECURITY_ATTRIBUTES lpThreadAttributes,
     SIZE_T dwStackSize,
     LPTHREAD_START_ROUTINE lpStartAddress,
     LPVOID lpParameter,
     DWORD dwCreationFlags,
-    LPDWORD lpThreadId
-);
+    LPDWORD lpThreadId);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_GetCurrentThread(
-    VOID
-);
+HANDLE WINAPI windyn_GetCurrentThread(
+    VOID);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE DWORD WINAPI windyn_SuspendThread(
-    HANDLE hThread
-);
+DWORD WINAPI windyn_SuspendThread(
+    HANDLE hThread);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE DWORD WINAPI windyn_ResumeThread(
-    HANDLE hThread
-);
+DWORD WINAPI windyn_ResumeThread(
+    HANDLE hThread);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_GetThreadContext(
+BOOL WINAPI windyn_GetThreadContext(
     HANDLE hThread,
-    LPCONTEXT lpContext
-);
+    LPCONTEXT lpContext);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_SetThreadContext(
+BOOL WINAPI windyn_SetThreadContext(
     HANDLE hThread,
-    CONST CONTEXT* lpContext
-);
+    CONST CONTEXT* lpContext);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE DWORD WINAPI windyn_WaitForSingleObject(
+DWORD WINAPI windyn_WaitForSingleObject(
     HANDLE hHandle,
-    DWORD dwMilliseconds
-);
+    DWORD dwMilliseconds);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_CloseHandle(
-    HANDLE hObject
-);
+BOOL WINAPI windyn_CloseHandle(
+    HANDLE hObject);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE HANDLE WINAPI windyn_CreateToolhelp32Snapshot(
+HANDLE WINAPI windyn_CreateToolhelp32Snapshot(
     DWORD dwFlags,
-    DWORD th32ProcessID
-);
+    DWORD th32ProcessID);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_Process32First(
+BOOL WINAPI windyn_Process32First(
     HANDLE hSnapshot,
-    LPPROCESSENTRY32 lppe
-);
+    LPPROCESSENTRY32 lppe);
 
-WINDYNDEF WINDYN_EXPORT 
-INLINE BOOL WINAPI windyn_Process32Next(
+BOOL WINAPI windyn_Process32Next(
     HANDLE hSnapshot,
-    LPPROCESSENTRY32 lppe
-);
+    LPPROCESSENTRY32 lppe);
 
 #endif
 
@@ -758,10 +724,11 @@ INLINE BOOL WINAPI windyn_Process32Next(
 
 #endif
 
-/*
+/**
 * history
 * v0.1, initial version
 * v0.1.1, add some function pointer
 * v0.1.2, add some inline stdc function
-* v0.1.3, add some inline windows api 
+* v0.1.3, add some inline windows api
+* v0.1.4, improve macro style
 */

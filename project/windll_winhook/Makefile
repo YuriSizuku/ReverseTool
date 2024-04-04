@@ -1,116 +1,71 @@
-# main config
-LIBPREFIX?=./../../
-ARCH?=i686
-PREFIX?=./build
+# build example
+# make libwinhook helloexe hellodll libwinhook_test CC=i686-w64-mingw32-gcc BUILD=32d 
+# make libwinhook helloexe hellodll libwinhook_test CC=x86_64-w64-mingw32-gcc BUILD=64d
+# wine build/libwinhook_test32d.exe && wine build/libwinhook_test64d.exe
 
-CC:=clang
-INCS:=-I$(LIBPREFIX)src
-LIBDIRS:=
+# general config
+CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
+BUILD:=32# 32, 32d, 64, 64d
+BUILD_DIR:=build
+INCS:=-I../../src
 LIBS:=-luser32 -lgdi32 -lpsapi
-CFLAGS:=-ffunction-sections\
-	-fdata-sections -std=c99
-LDFLAGS:=
+CFLAGS:=-fPIC -std=gnu99 \
+	-fvisibility=hidden \
+	-ffunction-sections -fdata-sections
+LDFLAGS:=-Wl,--enable-stdcall-fixup \
+		 -Wl,--kill-at \
+		 -Wl,--gc-sections
 
-# arch config
-ifeq ($(ARCH), x86_64) 
-ARCH_POSTFIX:=64
-LIBDIRS+=-L$(LIBPREFIX)lib64
-CFLAGS+=-D_WIN64
-ifdef DEBUG
-BUILD_POSTFIX:=64d
+# build config
+ifneq (,$(findstring 64, $(BUILD)))
+CFLAGS+=-m64
 else
-BUILD_POSTFIX:=64
-endif 
-else # x86
-ARCH_POSTFIX:=32
-LIBDIRS+=-L$(LIBPREFIX)lib32
-ifdef DEBUG
-BUILD_POSTFIX:=32d
-else
-BUILD_POSTFIX:=32
-endif 
+CFLAGS+=-m32
 endif
-
-# compiler config
-ifneq (,$(findstring clang, $(CC)))
-CFLAGS+=-target $(ARCH)-pc-windows-msvc \
-	-D_CRT_SECURE_NO_DEPRECATE 
-LDFLAGS+= -Wl,/OPT:REF\
-    -Wl,/DEF:src/libwinhook.def\
-	-Wno-undefined-inline
-else  # mingw 
-CFLAGS+=-m$(ARCH_POSTFIX) \
-	-fPIC\
-	-fvisibility=hidden\
-	-fgnu89-inline\
-	-DWINPE_NOASM 
-ifneq (,$(findstring gcc, $(CC)))
-LDFLAGS+=-lwinpthread \
-	-static-libgcc \
-	-static-libstdc++ \
-	-Wl,-Bstatic,--whole-archive \
-	-Wl,--no-whole-archive\
-	-Wl,--gc-sections\
-	-Wl,--enable-stdcall-fixup\
-	-Wl,--kill-at
-endif
-endif
-
-# optimization config
-ifdef DEBUG
+ifneq (,$(findstring d, $(BUILD)))
 CFLAGS+=-g -D_DEBUG
 else
 CFLAGS+=-Os
-endif 
-LIBDIRS+=-L$(PREFIX) 
-
-# system config
-ifeq ($(shell echo ${OS}), Windows_NT)
-DLL_EXT=.dll
-EXE_EXT=.exe
+endif
+ifneq (,$(findstring tcc, $(CC)))
+LDFLAGS= # tcc can not remove at at stdcall in i686
 else
-DLL_EXT?=.so
-EXE_EXT?=
 endif
 
-# other config
-ifneq (,$(findstring clang, $(CC)))
-else
-ifneq (,$(findstring gcc, $(CC)))
-endif
-endif
-
-all: prepare\
-	libwinhook\
-	libwinhook_test\
-	helloexe\
-	hellodll
+all: prepare libwinhook
 
 clean:
-	rm -rf $(PREFIX)/*libwinhook*
-	rm -rf $(PREFIX)/*hello*
-	rm -rf $(PREFIX)/*test*
+	@rm -rf $(BUILD_DIR)/*libwinhook*
+	@rm -rf $(BUILD_DIR)/*hello*
+	@rm -rf $(BUILD_DIR)/*test*
 
 prepare:
-	@if ! [ -d $(PREFIX) ]; then mkdir -p $(PREFIX); fi
+	@if ! [ -d $(BUILD_DIR) ]; then mkdir -p $(BUILD_DIR); fi
 
-libwinhook: src\libwinhook.c
+libwinhook: src/libwinhook.c
+	@echo "## $@"
+	$(CC) -shared $^ -o $(BUILD_DIR)/$@$(BUILD).dll \
+		$(INCS) $(LIBS) \
+		$(CFLAGS) $(LDFLAGS)
+
+libwinhook_test: src/libwinhook_test.c
+	@echo "## $@"
+	$(CC) $< -o $(BUILD_DIR)/$@$(BUILD).exe \
+		-L$(BUILD_DIR) -lwinhook$(BUILD) -DWINHOOK_NOINLINE \
+		$(INCS) $(LIBS) \
+		$(CFLAGS) $(LDFLAGS)
+
+helloexe: src/helloexe.c
+	@echo "## $@"
 	@echo \#\#building $@ ...
-	$(CC) -shared $< \
-		-o $(PREFIX)/$@$(BUILD_POSTFIX)$(DLL_EXT) \
-		$(CFLAGS) $(LDFLAGS) $(INCS) $(LIBS) $(LIBDIRS)
+	$(CC) $< -o $(BUILD_DIR)/hello$(BUILD).exe \
+		$(CFLAGS) -lgdi32 -luser32 \
+		-Wl,-subsystem,windows -municode
 
-libwinhook_test: src\libwinhook_test.c
-	$(CC) $< \
-		-o $(PREFIX)/$@$(BUILD_POSTFIX).exe \
-		$(CFLAGS) $(LDFLAGS) $(INCS) $(LIBS) $(LIBDIRS)
-
-helloexe: src\helloexe.c
+hellodll: src/hellodll.c
+	@echo "## $@"
 	@echo \#\#building $@ ...
-	$(CC) $< -o $(PREFIX)/hello$(BUILD_POSTFIX).exe $(CFLAGS) -lgdi32 -luser32
-
-hellodll: src\hellodll.c
-	@echo \#\#building $@ ...
-	$(CC) -shared $< -o $(PREFIX)/hello$(BUILD_POSTFIX).dll $(CFLAGS) -luser32
+	$(CC) -shared $< -o $(BUILD_DIR)/hello$(BUILD).dll \
+		$(CFLAGS) -luser32
 
 .PHONY: all clean prepare libwinhook helloexe hellodll

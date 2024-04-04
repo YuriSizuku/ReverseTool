@@ -9,7 +9,7 @@ BUILD:=32# 32, 32d, 64, 64d
 BUILD_DIR:=build
 INCS:=-I../../src
 LIBS:=-luser32 -lgdi32 -lpsapi
-CFLAGS:=-fPIC -std=gnu99 \
+CFLAGS:=-fPIC -std=c99 \
 	-fvisibility=hidden \
 	-ffunction-sections -fdata-sections
 LDFLAGS:=-Wl,--enable-stdcall-fixup \
