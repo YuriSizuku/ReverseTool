@@ -1,4 +1,4 @@
-name: build_tools
+name: build_wintools
 on:
   push: {tags:  ['v*'] } # Push events to matching v*, i.e. v1.0, v20.15.10
   pull_request: 
@@ -7,8 +7,8 @@ permissions:
   contents: write
   
 jobs:
-  build_winexe_libwinhook:
-    runs-on: windows-2019 # default batch, powershell
+  build_winexe_winloader:
+    runs-on: windows-2019
     steps:
     - name: pull and init
       uses: actions/checkout@v3
@@ -17,13 +17,55 @@ jobs:
     - name: add msbuild to path
       uses: microsoft/setup-msbuild@v1.1
     
-    - name: build winloader
+    - name: build target
       run: .\project\winexe_winloader\release_msvc.bat
     
-    - name: create a release
+    - name: upload release
       uses: ncipollo/release-action@v1
       if: github.event_name == 'push'
       with:
         artifacts: "./project/winexe_winloader/build/winloader32.exe,./project/winexe_winloader/build/winloader64.exe"
+        allowUpdates: "true"
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  build_windll_winhook:
+    runs-on: windows-2019
+    steps:
+    - name: pull and init
+      uses: actions/checkout@v3
+      with: {submodules: true}
+    
+    - name: add msbuild to path
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: build target
+      run: .\project\windll_winhook\release_msvc.bat
+    
+    - name: upload release
+      uses: ncipollo/release-action@v1
+      if: github.event_name == 'push'
+      with:
+        artifacts: "./project/windll_winhook/build/libwinhook32.dll,./project/windll_winhook/build/libwinhook64.dll"
+        allowUpdates: "true"
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  build_windll_winpe:
+    runs-on: windows-2019
+    steps:
+    - name: pull and init
+      uses: actions/checkout@v3
+      with: {submodules: true}
+    
+    - name: add msbuild to path
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: build target
+      run: .\project\windll_winpe\release_msvc.bat
+    
+    - name: upload release
+      uses: ncipollo/release-action@v1
+      if: github.event_name == 'push'
+      with:
+        artifacts: "./project/windll_winpe/build/libwinpe32.dll,./project/windll_winpe/build/libwinpe64.dll"
         allowUpdates: "true"
         token: ${{ secrets.GITHUB_TOKEN }}

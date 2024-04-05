@@ -97,10 +97,12 @@ DWORD winhook_startexeinject(LPCSTR exepath, LPSTR cmdstr, LPCSTR dllpath);
  * start a exe by CreateProcess
  * @return pid
 */
-#define winhook_startexe(exepath, cmdstr)\
-    winhook_startexeinject(exepath, cmdstr, NULL)
-
-
+WINHOOK_API
+DWORD winhook_startexe(LPCSTR exepath, LPSTR cmdstr)
+{
+    return winhook_startexeinject(exepath, cmdstr, NULL);
+}
+    
 /**
  * get the process handle by exename
 */
@@ -131,9 +133,12 @@ void winhook_installconsole();
 WINHOOK_API
 BOOL winhook_patchmemoryex(HANDLE hprocess,LPVOID addr, const void* buf, size_t bufsize);
 
-#define winhook_patchmemory(addr, buf, bufsize)\
-    winhook_patchmemoryex(GetCurrentProcess(), addr, buf, bufsize)
-
+WINHOOK_API
+BOOL winhook_patchmemory(LPVOID addr, const void* buf, size_t bufsize)
+{
+    return winhook_patchmemoryex(GetCurrentProcess(), addr, buf, bufsize);
+}
+    
 /**
  * batch patch memories
 */
@@ -141,8 +146,12 @@ WINHOOK_API
 BOOL winhook_patchmemorysex(HANDLE hprocess,
     LPVOID addrs[], void* bufs[], size_t bufsizes[], int n);
 
-#define winhook_patchmemorys(addrs, bufs, bufsizes, n)\
-    winhook_patchmemorysex(GetCurrentProcess(), addrs, bufs, bufsizes, n)
+WINHOOK_API
+BOOL winhook_patchmemorys(LPVOID addrs[], void* bufs[], size_t bufsizes[], int n)
+{
+    return winhook_patchmemorysex(GetCurrentProcess(), addrs, bufs, bufsizes, n);
+}
+    
 
 /**
  * patch memory with pattern, 
@@ -164,9 +173,12 @@ WINHOOK_API
 int winhook_patchmemory1337ex(HANDLE hprocess, 
     const char* pattern, size_t base, BOOL revert);
 
-#define winhook_patchmemory1337(pattern, base, revert) \
-    winhook_patchmemory1337ex(GetCurrentProcess(), pattern, base, revert)
-
+WINHOOK_API
+int winhook_patchmemory1337(const char* pattern, size_t base, BOOL revert)
+{
+    return winhook_patchmemory1337ex(GetCurrentProcess(), pattern, base, revert);
+}
+    
 /**
  * patch memory with pattern ips(International Patching System)
  * specifications at https://zerosoft.zophar.net/ips.php
@@ -175,9 +187,12 @@ int winhook_patchmemory1337ex(HANDLE hprocess,
 WINHOOK_API
 int winhook_patchmemoryipsex(HANDLE hprocess, const char* pattern, size_t base);
 
-#define winhook_patchmemoryips(pattern, base) \
-    winhook_patchmemoryipsex(GetCurrentProcess(), pattern, base)
-
+WINHOOK_API
+int winhook_patchmemoryips(const char* pattern, size_t base)
+{
+    return winhook_patchmemoryipsex(GetCurrentProcess(), pattern, base);
+}
+    
 /**
  * search the pattern like "ab 12 ?? 34"
  * @return the matched address
@@ -197,17 +212,23 @@ void* winhook_searchmemoryex(HANDLE hprocess,
 WINHOOK_API
 BOOL winhook_iathookpe(LPCSTR targetDllName, void* mempe, PROC pfnOrg, PROC pfnNew);
 
-#define winhook_iathookmodule(targetDllName, moduleDllName, pfnOrg, pfnNew)\
-    winhook_iathookpe(targetDllName, GetModuleHandle(moduleDllName), pfnOrg, pfnNew)
-
+WINHOOK_API
+BOOL winhook_iathookmodule(LPCSTR targetDllName, LPCSTR moduleDllName, PROC pfnOrg, PROC pfnNew)
+{
+    return winhook_iathookpe(targetDllName, GetModuleHandle(moduleDllName), pfnOrg, pfnNew);
+}
+    
 /**
  * iat dynamiclly hook, 
  * replace the @param pfgNew with @param pfnOrg function 
  * @param targetDllName like "user32.dll", "kernel32.dll"
 */
-#define winhook_iathook(targetDllName, pfnOrg, pfgNew)\
-    winhook_iathookmodule(targetDllName, NULL, pfnOrg, pfgNew)
-
+WINHOOK_API
+BOOL winhook_iathook(LPCSTR targetDllName, PROC pfnOrg, PROC pfgNew)
+{
+    return winhook_iathookmodule(targetDllName, NULL, pfnOrg, pfgNew);
+}
+    
 /**
  * inline hooks wrapper, 
  * @param pfnTargets -> @param pfnNews, save origin pointers in @param pfnOlds
@@ -754,5 +775,5 @@ int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], 
  * v0.2.7, add win_startexeinject, fix winhook_searchmemoryex match bug
  * v0.3, use javadoc style, add winhook_patchmemorypattern
  * v0.3.1, add winhook_patchmemory1337, winhook_patchmemoryips
- * v0.3.2, improve macro style
+ * v0.3.2, improve macro style, chaneg some of macro to function
 */
