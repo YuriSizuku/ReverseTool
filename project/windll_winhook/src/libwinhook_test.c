@@ -141,5 +141,6 @@ int main(int argc, char *argv[])
 	test_searchpattern2();
 	test_startexeinject();
 	test_windyn();
+	printf("%s finish!\n", argv[0]);
 	return 0;
 }

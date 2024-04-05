@@ -1,5 +1,5 @@
 # build example
-# make libwinhook helloexe hellodll libwinhook_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d 
+# make libwinhook helloexe hellodll libwinhook_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d
 # make libwinhook helloexe hellodll libwinhook_test CC=x86_64-w64-mingw32-gcc BUILD_TYPE=64d
 # wine build/libwinhook_test32d.exe && wine build/libwinhook_test64d.exe
 

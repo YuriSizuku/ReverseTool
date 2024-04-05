@@ -566,11 +566,24 @@ BOOL STDCALL winpe_memFreeLibraryEx(void *mempe,
 
 PROC STDCALL winpe_memGetProcAddress(void *mempe, const char *funcname)
 {
+    // this function might failed if inline and -Os, -O3, if in dll function, use printf might help
     void* expva = winpe_memfindexp(mempe, funcname);
-    size_t exprva = (size_t)((uint8_t*)expva - (uint8_t*)mempe);
-    return (PROC)winpe_memforwardexp(mempe, exprva, // to avoid infinity loop
-        (PFN_LoadLibraryA)winpe_findloadlibrarya(), 
-        (PFN_GetProcAddress)winpe_findgetprocaddress());
+    size_t exprva = (size_t)expva - (size_t)mempe;
+    // printf("[winpe_memGetProcAddress] expva=%p\n", expva);
+    
+    // use pfnLoadLibraryA, pfnGetProcAddress to avoid infinity loop
+    void *hmod_kernel32 = winpe_findkernel32();
+    char name_GetProcAddress[] = {'G', 'e', 't', 'P', 'r', 'o', 'c', 'A', 'd', 'd', 'r', 'e', 's', 's', '\0'};
+    char name_LoadLibraryA[] = {'L', 'o', 'a', 'd', 'L', 'i', 'b', 'r', 'a', 'r', 'y', 'A', '\0'};
+    char *name[2] = {name_LoadLibraryA, name_GetProcAddress};
+    void *func[2] = {NULL, NULL};
+    for(int i=0; i<2;i++)
+    {
+        func[i] = winpe_memfindexp(hmod_kernel32, name[i]);
+    }
+    PFN_LoadLibraryA pfnLoadLibraryA =  (PFN_LoadLibraryA)func[0];
+    PFN_GetProcAddress pfnGetProcAddress = (PFN_GetProcAddress)func[1];
+    return (PROC)winpe_memforwardexp(mempe, exprva, pfnLoadLibraryA, pfnGetProcAddress); 
 }
 
 // PE query functions
@@ -700,17 +713,16 @@ void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename)
 
 PROC winpe_findloadlibrarya()
 {
-    // return (PROC)LoadLibraryA;
-    HMODULE hmod_kernel32 = (HMODULE)winpe_findkernel32();
+    // -Os might make this function not current, such as strcpy(Flink, "LoadLibraryA");
+    void* hmod_kernel32 = winpe_findkernel32();
     char name_LoadLibraryA[] = {'L', 'o', 'a', 'd', 'L', 'i', 'b', 'r', 'a', 'r', 'y', 'A', '\0'};
     // suppose exp no forward, to avoid recursive
-    return (PROC)winpe_memfindexp((void*)hmod_kernel32, name_LoadLibraryA);
+    return (PROC)winpe_memfindexp(hmod_kernel32, name_LoadLibraryA);
 }
 
 PROC winpe_findgetprocaddress()
 {
-    // return (PROC)GetProcAddress;
-    HMODULE hmod_kernel32 = (HMODULE)winpe_findkernel32();
+    void* hmod_kernel32 = winpe_findkernel32();
     char name_GetProcAddress[] = {'G', 'e', 't', 'P', 'r', 'o', 'c', 'A', 'd', 'd', 'r', 'e', 's', 's', '\0'};
     return (PROC)winpe_memfindexp(hmod_kernel32, name_GetProcAddress);
 }
@@ -1012,21 +1024,21 @@ void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva,
     PFN_LoadLibraryA pfnLoadLibraryA, PFN_GetProcAddress pfnGetProcAddress)
 {
     // this function might have infinite loop
-    // such as this situation
     // kerenl32.dll, GetProcessMitigationPolicy -> api-ms-win-core-processthreads-l1-1-1.dll -> kerenl32.dll, GetProcessMitigationPolicys
     size_t dllbase = (size_t)mempe;
     while (1)
     {
         PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)dllbase;
-        PIMAGE_NT_HEADERS  pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)dllbase + pDosHeader->e_lfanew);
+        PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)((uint8_t*)dllbase + pDosHeader->e_lfanew);
         PIMAGE_OPTIONAL_HEADER pOptHeader = &pNtHeader->OptionalHeader;
         PIMAGE_DATA_DIRECTORY pDataDirectory = pOptHeader->DataDirectory;
         PIMAGE_DATA_DIRECTORY pExpEntry = &pDataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
-        if(exprva>=pExpEntry->VirtualAddress && exprva<= pExpEntry->VirtualAddress + pExpEntry->Size)
+        if(exprva >= pExpEntry->VirtualAddress && exprva < pExpEntry->VirtualAddress + pExpEntry->Size)
         {
             char namebuf[MAX_PATH];
-            char *dllname = (char *)(dllbase + exprva);
+            char *dllname = (char*)(dllbase + exprva);
             char *funcname = dllname;
+            //printf("[winpe_memforwardexp] dllname=%s funcname=%s\n", dllname, funcname);
             int i=0, j=0;
             while(dllname[i]!=0)
             {
@@ -1041,7 +1053,7 @@ void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva,
                 }
                 else
                 {
-                    namebuf[j]=dllname[i];
+                    namebuf[j] = dllname[i];
                 }
                 i++;
                 j++;
@@ -1049,8 +1061,8 @@ void* STDCALL winpe_memforwardexp(void *mempe, size_t exprva,
             namebuf[j] = '\0';
             dllname = namebuf;
             dllbase = (size_t)pfnLoadLibraryA(dllname);
-            exprva = (size_t)pfnGetProcAddress((HMODULE)dllbase, funcname);
-            exprva -= dllbase;
+            size_t expva = (size_t)pfnGetProcAddress((HMODULE)dllbase, funcname);
+            exprva = expva - dllbase;
         }
         else
         {

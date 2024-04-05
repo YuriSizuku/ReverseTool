@@ -1,5 +1,5 @@
 # build example
-# make libwinpe libwinpe_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d 
+# make libwinpe libwinpe_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d
 # make libwinpe libwinpe_test CC=x86_64-w64-mingw32-gcc BUILD_TYPE=64d
 # wine build/libwinpe_test32d.exe && wine build/libwinpe_test64d.exe
 
@@ -27,7 +27,7 @@ endif
 ifneq (,$(findstring d, $(BUILD_TYPE)))
 CFLAGS+=-g -D_DEBUG
 else
-CFLAGS+=-Os
+CFLAGS+=-O3
 endif
 ifneq (,$(findstring tcc, $(CC)))
 LDFLAGS= # tcc can not remove at at stdcall in i686
