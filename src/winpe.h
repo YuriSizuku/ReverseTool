@@ -197,7 +197,12 @@ void* winpe_findkernel32();
 */
 WINPE_API
 void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename);
-#define winpe_findmodulea(modulename) winpe_findmoduleaex(NULL, modulename)
+
+WINPE_API
+void* STDCALL winpe_findmodulea(const char *modulename)
+{
+    return winpe_findmoduleaex(NULL, modulename);
+}
 
 /**
  * @return LoadLibraryA func addr
@@ -337,9 +342,14 @@ size_t STDCALL winpe_appendsecth(void *mempe, PIMAGE_SECTION_HEADER psecth);
 #endif
 
 #include <stdio.h>
-#include <assert.h>
 #include <windows.h>
 #include <winternl.h>
+
+#ifdef _DEBUG
+#include <assert.h>
+#else
+#define assert(x)
+#endif
 
 // util INLINE functions
 INLINE size_t _winpeinl_strlen(const char* str1)

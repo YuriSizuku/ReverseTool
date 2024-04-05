@@ -14,7 +14,9 @@ CFLAGS:=-fPIC -std=gnu99 \
 	-ffunction-sections -fdata-sections
 LDFLAGS:=-Wl,--enable-stdcall-fixup \
 		 -Wl,--kill-at \
-		 -Wl,--gc-sections
+		 -Wl,--gc-sections \
+		 -D_WIN32_WINNT=0X0400 \
+		 -Wl,--subsystem,console:4.0 # compatible for xp
 
 # build config
 ifneq (,$(findstring 64, $(BUILD_TYPE)))
