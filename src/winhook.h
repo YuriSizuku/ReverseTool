@@ -1,6 +1,6 @@
 /**
  * windows dyamic hook util functions wrappers
- *    v0.3.2, developed by devseed
+ *    v0.3.3, developed by devseed
  * 
  * macros:
  *    WINHOOK_IMPLEMENT, include defines of each function
@@ -13,42 +13,13 @@
 
 #ifndef _WINHOOK_H
 #define _WINHOOK_H
-#define WINHOOK_VERSION 320
+#define WINHOOK_VERSION 330
 
-// define general macro
-#if defined(_MSC_VER) || defined(__TINYC__)
-#ifndef STDCALL
-#define STDCALL __stdcall
-#endif
-#ifndef NAKED
-#define NAKED __declspec(naked)
-#endif
-#ifndef INLINE
-#define INLINE __forceinline
-#endif
-#ifndef EXPORT
-#define EXPORT __declspec(dllexport)
-#endif
+#ifdef USECOMPAT
+#include "commdef_v100.h"
 #else
-#ifndef STDCALL
-#define STDCALL __attribute__((stdcall))
-#endif
-#ifndef NAKED
-#define NAKED __attribute__((naked))
-#endif
-#ifndef INLINE
-#define INLINE __attribute__((always_inline)) inline
-#endif
-#ifndef EXPORT 
-#define EXPORT __attribute__((visibility("default")))
-#endif
-#endif // _MSC_VER
-#if defined(__TINYC__) // fix tcc not support inline
-#ifdef INLINE
-#undef INLINE
-#endif
-#define INLINE
-#endif
+#include "commdef.h"
+#endif // USECOMPAT
 
 // define specific macro
 #ifdef WINHOOK_API
@@ -240,10 +211,6 @@ int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], si
 WINHOOK_API
 int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], size_t n);
 
-#ifdef __cplusplus
-}
-#endif
-
 #ifdef WINHOOK_IMPLEMENTATION
 #include <stdio.h>
 #include <stdint.h>
@@ -255,19 +222,23 @@ int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], 
 #ifdef WINHOOK_USEDYNBIND
 #ifndef WINDYN_IMPLEMENTATION
 #define WINDYN_IMPLEMENTATION
-#endif
+#endif // WINDYN_IMPLEMENTATION
 #ifndef WINDYN_STATIC
 #define WINDYN_STATIC
-#endif
+#endif // WINDYN_STATIC
+#ifdef USECOMPAT
+#include "windyn_v150.h"
+#else
 #include "windyn.h"
-#define strlen windyn_strlen
-#define _stricmp windyn_stricmp
-#define _wcsicmp windyn_wcsicmp
+#endif // USECOMPAT
+#define strlen inl_strlen
+#define _stricmp inl_stricmp
+#define _wcsicmp inl_wcsicmp
 #define GetModuleHandleA windyn_GetModuleHandleA
 #define LoadLibraryA windyn_LoadLibraryA
 #define GetProcAddress windyn_GetProcAddress
 #define VirtualAllocEx windyn_VirtualAllocEx
-#endif
+#endif // WINHOOK_USEDYNBIND
 
 // loader functions
 DWORD winhook_startexeinject(LPCSTR exepath, LPSTR cmdstr, LPCSTR dllpath)
@@ -701,18 +672,15 @@ BOOL winhook_iathookpe(LPCSTR targetDllName, void* mempe, PROC pfnOrg, PROC pfnN
         LPCSTR pDllName = (LPCSTR)(imagebase + pImpDescriptor->Name);
         if (!_stricmp(pDllName, targetDllName)) // ignore case
         {
-            PIMAGE_THUNK_DATA pFirstThunk = (PIMAGE_THUNK_DATA)
-                (imagebase + pImpDescriptor->FirstThunk);
+            PIMAGE_THUNK_DATA pFirstThunk = (PIMAGE_THUNK_DATA)(imagebase + pImpDescriptor->FirstThunk);
             // find the iat function va
             for (; pFirstThunk->u1.Function; pFirstThunk++) 
             {
                 if (pFirstThunk->u1.Function == (size_t)pfnOrg)
                 {
-                    VirtualProtect((LPVOID)&pFirstThunk->u1.Function,
-                        4, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+                    VirtualProtect((LPVOID)&pFirstThunk->u1.Function, 4, PAGE_EXECUTE_READWRITE, &dwOldProtect);
                     pFirstThunk->u1.Function = (size_t)pfnNew;
-                    VirtualProtect((LPVOID)&pFirstThunk->u1.Function,
-                        4, dwOldProtect, &dwOldProtect);
+                    VirtualProtect((LPVOID)&pFirstThunk->u1.Function, 4, dwOldProtect, &dwOldProtect);
                     return TRUE;
                 }
             }
@@ -724,9 +692,10 @@ BOOL winhook_iathookpe(LPCSTR targetDllName, void* mempe, PROC pfnOrg, PROC pfnN
 #ifndef WINHOOK_NO3RDLIB
 #ifndef MINHOOK_IMPLEMENTATION
 #define MINHOOK_IMPLEMENTATION
-#endif
-#ifdef USE_COMPAT
-#include "stb_minhook_v1330.h"
+#define MINHOOK_STATIC
+#endif // MINHOOK_IMPLEMENTATION
+#ifdef USECOMPAT
+#include "stb_minhook_v1331.h"
 #else
 #include "stb_minhook.h"
 #endif
@@ -758,10 +727,14 @@ int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], 
     if(MH_Uninitialize() != MH_OK) return 0;
     return i;
 }
-#endif
-#endif
+#endif // WINHOOK_NO3RDLIB
+#endif // MINHOOK_IMPLEMENTATION
 
-#endif
+#ifdef __cplusplus
+}
+#endif // __cplusplus
+
+#endif // _WINHOOK_H
 
 /**
  * history:
@@ -776,4 +749,5 @@ int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], 
  * v0.3, use javadoc style, add winhook_patchmemorypattern
  * v0.3.1, add winhook_patchmemory1337, winhook_patchmemoryips
  * v0.3.2, improve macro style, chaneg some of macro to function
+ * v0.3.3, seperate some macro to commdef
 */

@@ -1,6 +1,6 @@
 /** windows api function pointer define,
  *  functions or macros for dynamic bindings
- *    v0.1.4, developed by devseed
+ *    v0.1.5, developed by devseed
  * 
  * macros:
  *    WINDYN_IMPLEMENT, include defines of each function
@@ -11,42 +11,13 @@
 
 #ifndef _WINDYN_H
 #define _WINDYN_H
-#define WINDYN_VERSION 140
+#define WINDYN_VERSION 150
 
-// define general macro
-#if defined(_MSC_VER) || defined(__TINYC__)
-#ifndef STDCALL
-#define STDCALL __stdcall
-#endif
-#ifndef NAKED
-#define NAKED __declspec(naked)
-#endif
-#ifndef INLINE
-#define INLINE __forceinline
-#endif
-#ifndef EXPORT
-#define EXPORT __declspec(dllexport)
-#endif
+#ifdef USECOMPAT
+#include "commdef_v100.h"
 #else
-#ifndef STDCALL
-#define STDCALL __attribute__((stdcall))
-#endif
-#ifndef NAKED
-#define NAKED __attribute__((naked))
-#endif
-#ifndef INLINE
-#define INLINE __attribute__((always_inline)) inline
-#endif
-#ifndef EXPORT 
-#define EXPORT __attribute__((visibility("default")))
-#endif
-#endif // _MSC_VER
-#if defined(__TINYC__) // fix tcc not support inline
-#ifdef INLINE
-#undef INLINE
-#endif
-#define INLINE
-#endif
+#include "commdef.h"
+#endif // USECOMPAT
 
 // define specific macro
 #ifdef WINDYN_API
@@ -256,7 +227,7 @@ typedef NTSTATUS (NTAPI * PFN_NtQueryInformationProcess)(
         for (DWORD i = 0; i < pExpDescriptor->NumberOfNames; i++)\
         {\
             LPCSTR curname = (LPCSTR)((uint8_t*)mempe + namerva[i]);\
-            if (windyn_stricmp(curname, funcname) == 0)\
+            if (inl_stricmp(curname, funcname) == 0)\
             {\
                 exp = (void*)((uint8_t*)mempe + funcrva[ordrva[i]]); \
                 break;\
@@ -316,7 +287,7 @@ typedef NTSTATUS (NTAPI * PFN_NtQueryInformationProcess)(
             int i; \
             for (i = ustr->Length / 2 - 1; i > 0 && ustr->Buffer[i] != '\\'; i--); \
                 if (ustr->Buffer[i] == '\\') i++; \
-                    if (windyn_stricmp2(modulename, ustr->Buffer + i) == 0)\
+                    if (inl_stricmp2(modulename, ustr->Buffer + i) == 0)\
                     {\
                         hmod = ldrentry->DllBase; \
                         break; \
@@ -345,25 +316,6 @@ typedef NTSTATUS (NTAPI * PFN_NtQueryInformationProcess)(
     char name_GetProcAddress[] = { 'G', 'e', 't', 'P', 'r', 'o', 'c', 'A', 'd', 'd', 'r', 'e', 's', 's', '\0' }; \
     WINDYN_FINDEXP((void*)kernel32, name_GetProcAddress, pfnGetProcAddress);\
 }
-
-// stdc inline functions declear
-WINDYN_API
-int windyn_strlen(const char* str1);
-
-WINDYN_API
-int windyn_stricmp(const char* str1, const char* str2);
-
-WINDYN_API
-int windyn_stricmp2(const char* str1, const wchar_t* str2);
-
-WINDYN_API
-int windyn_wcsicmp(const wchar_t* str1, const wchar_t* str2);
-
-WINDYN_API
-void* windyn_memset(void* buf, int ch, size_t n);
-
-WINDYN_API
-void* windyn_memcpy(void* dst, const void* src, size_t n);
 
 // winapi inline functions declear
 WINDYN_API
@@ -501,86 +453,6 @@ BOOL WINAPI windyn_Process32Next(
 #include <windows.h>
 #include <winternl.h>
 // util functions
-
-// stdc inline functions define
-int windyn_strlen(const char* str1)
-{
-    const char* p = str1;
-    while (*p) p++;
-    return (int)(p - str1);
-}
-
-int windyn_stricmp(const char* str1, const char* str2)
-{
-    int i = 0;
-    while (str1[i] != 0 && str2[i] != 0)
-    {
-        if (str1[i] == str2[i]
-            || str1[i] + 0x20 == str2[i]
-            || str2[i] + 0x20 == str1[i])
-        {
-            i++;
-        }
-        else
-        {
-            return (int)str1[i] - (int)str2[i];
-        }
-    }
-    return (int)str1[i] - (int)str2[i];
-}
-
-int windyn_stricmp2(const char* str1, const wchar_t* str2)
-{
-    int i = 0;
-    while (str1[i] != 0 && str2[i] != 0)
-    {
-        if ((wchar_t)str1[i] == str2[i]
-            || (wchar_t)str1[i] + 0x20 == str2[i]
-            || str2[i] + 0x20 == (wchar_t)str1[i])
-        {
-            i++;
-        }
-        else
-        {
-            return (int)str1[i] - (int)str2[i];
-        }
-    }
-    return (int)str1[i] - (int)str2[i];
-}
-
-int windyn_wcsicmp(const wchar_t * str1, const wchar_t* str2)
-{
-    int i = 0;
-    while (str1[i] != 0 && str2[i] != 0)
-    {
-        if (str1[i] == str2[i]
-            || str1[i] + 0x20 == str2[i]
-            || str2[i] + 0x20 == str1[i])
-        {
-            i++;
-        }
-        else
-        {
-            return (int)str1[i] - (int)str2[i];
-        }
-    }
-    return (int)str1[i] - (int)str2[i];
-}
-
-void* windyn_memset(void* buf, int ch, size_t n)
-{
-    char* p = buf;
-    for (size_t i = 0; i < n; i++) p[i] = (char)ch;
-    return buf;
-}
-
-void* windyn_memcpy(void* dst, const void* src, size_t n)
-{
-    char* p1 = (char*)dst;
-    char* p2 = (char*)src;
-    for (size_t i = 0; i < n; i++) p1[i] = p2[i];
-    return dst;
-}
 
 // winapi inline functions define
 HMODULE WINAPI windyn_GetModuleHandleA(
@@ -722,19 +594,20 @@ BOOL WINAPI windyn_Process32Next(
     HANDLE hSnapshot,
     LPPROCESSENTRY32 lppe);
 
-#endif
+#endif // WINDYN_IMPLEMENTATION
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif
+#endif // _WINDYN_H
 
 /**
-* history
-* v0.1, initial version
-* v0.1.1, add some function pointer
-* v0.1.2, add some inline stdc function
-* v0.1.3, add some inline windows api
-* v0.1.4, improve macro style
+ * history
+ * v0.1, initial version
+ * v0.1.1, add some function pointer
+ * v0.1.2, add some inline stdc function
+ * v0.1.3, add some inline windows api
+ * v0.1.4, improve macro style
+ * v0.1.5, seperate some macro to commdef
 */

@@ -1,7 +1,8 @@
-# build example
+# build example, tested in linux 10.0.0-3, gcc 12, wine-9.0
 # make libwinpe libwinpe_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d
 # make libwinpe libwinpe_test CC=x86_64-w64-mingw32-gcc BUILD_TYPE=64d
-# wine build/libwinpe_test32d.exe && wine build/libwinpe_test64d.exe
+# wine build/libwinpe_test32d.exe
+# wine build/libwinpe_test64d.exe
 
 # general config
 CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
@@ -40,11 +41,11 @@ clean:
 	@rm -rf $(BUILD_DIR)/*libwinpe*
 
 prepare:
-	@if ! [ -d $(BUILD_DIR) ]; then mkdir -p $(BUILD_DIR); fi
+	@mkdir -p $(BUILD_DIR)
 
 libwinpe: src/libwinpe.c
 	@echo "## $@"
-	$(CC) -shared $^ -o $(BUILD_DIR)/$@$(BUILD_TYPE).dll \
+	$(CC) -shared $< -o $(BUILD_DIR)/$@$(BUILD_TYPE).dll \
 		$(INCS) $(LIBS) \
 		$(CFLAGS) $(LDFLAGS)
 

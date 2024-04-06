@@ -1,6 +1,6 @@
 /**
  * Single header project for windows pe structure, adjusting realoc addrs, or iat. 
- *    v0.3.6, developed by devseed
+ *    v0.3.7, developed by devseed
  * 
  * macros:
  *    WINPE_IMPLEMENT, include defines of each function
@@ -12,36 +12,13 @@
 
 #ifndef _WINPE_H
 #define _WINPE_H
-#define WINPE_VERSION 360
+#define WINPE_VERSION 370
 
-// define general macro
-#if defined(_MSC_VER) || defined(__TINYC__)
-#ifndef STDCALL
-#define STDCALL __stdcall
-#endif
-#ifndef NAKED
-#define NAKED __declspec(naked)
-#endif
-#ifndef INLINE
-#define INLINE __forceinline
-#endif
-#ifndef EXPORT
-#define EXPORT __declspec(dllexport)
-#endif
+#ifdef USECOMPAT
+#include "commdef_v100.h"
 #else
-#ifndef STDCALL
-#define STDCALL __attribute__((stdcall))
-#endif
-#ifndef NAKED
-#define NAKED __attribute__((naked))
-#endif
-#ifndef INLINE
-#define INLINE __attribute__((always_inline)) inline
-#endif
-#ifndef EXPORT 
-#define EXPORT __attribute__((visibility("default")))
-#endif
-#endif // _MSC_VER
+#include "commdef.h"
+#endif // USECOMPAT
 
 // define specific macro
 #ifdef WINPE_API
@@ -55,12 +32,6 @@
 #endif
 #ifdef WINPE_API_INLINE
 #undef WINPE_API_INLINE
-#endif
-#if defined(__TINYC__) // fix tcc not support inline
-#ifdef INLINE
-#undef INLINE
-#endif
-#define INLINE
 #endif
 
 #ifdef WINPE_STATIC
@@ -351,83 +322,6 @@ size_t STDCALL winpe_appendsecth(void *mempe, PIMAGE_SECTION_HEADER psecth);
 #define assert(x)
 #endif
 
-// util INLINE functions
-INLINE size_t _winpeinl_strlen(const char* str1)
-{
-    const char* p = str1;
-    while(*p) p++;
-    return p - str1;
-}
-
-INLINE int _winpeinl_stricmp(const char *str1, const char *str2)
-{
-    int i=0;
-    while(str1[i]!=0 && str2[i]!=0)
-    {
-        if (str1[i] == str2[i] 
-        || str1[i] + 0x20 == str2[i] 
-        || str2[i] + 0x20 == str1[i])
-        {
-            i++;
-        }
-        else
-        {
-            return (int)str1[i] - (int)str2[i];
-        }
-    }
-    return (int)str1[i] - (int)str2[i];
-}
-
-INLINE int _winpeinl_stricmp2(const char *str1, const wchar_t* str2)
-{
-    int i=0;
-    while(str1[i]!=0 && str2[i]!=0)
-    {
-        if ((wchar_t)str1[i] == str2[i] 
-        || (wchar_t)str1[i] + 0x20 == str2[i] 
-        || str2[i] + 0x20 == (wchar_t)str1[i])
-        {
-            i++;
-        }
-        else
-        {
-            return (int)str1[i] - (int)str2[i];
-        }
-    }
-    return (int)str1[i] - (int)str2[i];
-}
-
-INLINE uint32_t _winpeinl_crc32(const void *buf, size_t n)
-{
-    uint32_t crc32 = ~0;
-    for(size_t i=0; i< n; i++)
-    {
-        crc32 ^= *(const uint8_t*)((uint8_t*)buf+i);
-
-        for(int i = 0; i < 8; i++)
-        {
-            uint32_t t = ~((crc32&1) - 1); 
-            crc32 = (crc32>>1) ^ (0xEDB88320 & t);
-        }
-    }
-    return ~crc32;
-}
-
-INLINE void* _winpeinl_memset(void *buf, int ch, size_t n)
-{
-    char *p = buf;
-    for(size_t i=0;i<n;i++) p[i] = (char)ch;
-    return buf;
-}
-
-INLINE void* _winpeinl_memcpy(void *dst, const void *src, size_t n)
-{
-    char *p1 = (char*)dst;
-    char *p2 = (char*)src;
-    for(size_t i=0;i<n;i++) p1[i] = p2[i];
-    return dst;
-}
-
 // PE high order fnctions
 void* STDCALL winpe_memload_file(const char *path, size_t *pmemsize, bool_t same_align)
 {
@@ -531,7 +425,7 @@ void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
     {
         DWORD oldprotect;
         pfnVirtualProtect((void*)imagebase, imagesize, PAGE_EXECUTE_READWRITE, &oldprotect);
-        _winpeinl_memcpy((void*)imagebase, mempe, imagesize);
+        inl_memcpy((void*)imagebase, mempe, imagesize);
         pfnVirtualProtect((void*)imagebase, imagesize, oldprotect, &oldprotect);
     }
 
@@ -702,7 +596,7 @@ void* STDCALL winpe_findmoduleaex(PPEB peb, const char *modulename)
         int i;
         for(i=ustr->Length/2-1; i>0 && ustr->Buffer[i]!='\\';i--);
         if(ustr->Buffer[i]=='\\') i++;
-        if(_winpeinl_stricmp2(modulename,  ustr->Buffer + i)==0)
+        if(inl_stricmp2(modulename,  ustr->Buffer + i)==0)
         {
             return ldrentry->DllBase;
         }
@@ -770,12 +664,12 @@ size_t STDCALL winpe_memload(const void *rawpe, size_t rawsize,
     if(!mempe) return imagesize;
     else if(memsize!=0 && memsize<imagesize) return 0;
 
-    _winpeinl_memset(mempe, 0, imagesize);
-    _winpeinl_memcpy(mempe, rawpe, pOptHeader->SizeOfHeaders);
+    inl_memset(mempe, 0, imagesize);
+    inl_memcpy(mempe, rawpe, pOptHeader->SizeOfHeaders);
     
     for(WORD i=0;i<sectNum;i++)
     {
-        _winpeinl_memcpy((uint8_t*)mempe+pSectHeader[i].VirtualAddress, 
+        inl_memcpy((uint8_t*)mempe+pSectHeader[i].VirtualAddress, 
             (uint8_t*)rawpe+pSectHeader[i].PointerToRawData, pSectHeader[i].SizeOfRawData);
     }
 
@@ -942,7 +836,7 @@ void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
     for (; pImpDescriptor->Name; pImpDescriptor++) 
     {
         pDllName = (LPCSTR)((uint8_t*)mempe + pImpDescriptor->Name);
-        if(dllname && _winpeinl_stricmp(pDllName, dllname)!=0) continue;
+        if(dllname && inl_stricmp(pDllName, dllname)!=0) continue;
         pFtThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->FirstThunk);
         pOftThunk = (PIMAGE_THUNK_DATA)((uint8_t*)mempe + pImpDescriptor->OriginalFirstThunk);
 
@@ -956,7 +850,7 @@ void* STDCALL winpe_memfindiat(void *mempe, LPCSTR dllname, LPCSTR funcname)
             }
             else
             {
-                if(_winpeinl_stricmp(pImpByName->Name, funcname)==0) return &pFtThunk[j];
+                if(inl_stricmp(pImpByName->Name, funcname)==0) return &pFtThunk[j];
             }
         }
     }
@@ -987,7 +881,7 @@ void* STDCALL winpe_memfindexp(void *mempe, LPCSTR funcname)
         for(DWORD i=0;i<pExpDescriptor->NumberOfNames;i++)
         {
             LPCSTR curname = (LPCSTR)((uint8_t*)mempe+namerva[i]);
-            if(_winpeinl_stricmp(curname, funcname)==0)
+            if(inl_stricmp(curname, funcname)==0)
             {
                 return (void*)((uint8_t*)mempe + funcrva[ordrva[i]]);
             }       
@@ -1012,7 +906,7 @@ void* STDCALL winpe_memfindexpcrc32(void* mempe, uint32_t crc32)
     for (DWORD i = 0; i < pExpDescriptor->NumberOfNames; i++)
     {
         LPCSTR curname = (LPCSTR)((uint8_t*)mempe + namerva[i]);
-        if (crc32==_winpeinl_crc32(curname, _winpeinl_strlen(curname)))
+        if (crc32==inl_crc32(curname, inl_strlen(curname)))
         {
             return (void*)((uint8_t*)mempe + funcrva[ordrva[i]]);
         }
@@ -1146,7 +1040,7 @@ size_t STDCALL winpe_appendsecth(void *pe, PIMAGE_SECTION_HEADER psecth)
 
     // adjust the section and imagesize 
     pFileHeader->NumberOfSections++;
-    _winpeinl_memcpy(&pSectHeader[sectNum], psecth, sizeof(IMAGE_SECTION_HEADER));
+    inl_memcpy(&pSectHeader[sectNum], psecth, sizeof(IMAGE_SECTION_HEADER));
     align = pOptHeader->SectionAlignment;
     addr = psecth->VirtualAddress + psecth->Misc.VirtualSize;
     if(addr % align) addr += align - addr%align;
@@ -1171,4 +1065,5 @@ size_t STDCALL winpe_appendsecth(void *pe, PIMAGE_SECTION_HEADER psecth)
  * v0.3.4, add WINPE_NOASM to make compatible for vs x64
  * v0.3.5, add winpe_memfindexpcrc32
  * v0.3.6, add AT&T format asm for gcc, improve macro style and comment
+ * v0.3.7, seperate some macro to commdef
 */

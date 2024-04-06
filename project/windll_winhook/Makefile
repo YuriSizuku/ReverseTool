@@ -1,7 +1,8 @@
-# build example
+# build example, tested in linux 10.0.0-3, gcc 12, wine-9.0
 # make libwinhook helloexe hellodll libwinhook_test CC=i686-w64-mingw32-gcc BUILD_TYPE=32d
 # make libwinhook helloexe hellodll libwinhook_test CC=x86_64-w64-mingw32-gcc BUILD_TYPE=64d
-# wine build/libwinhook_test32d.exe && wine build/libwinhook_test64d.exe
+# cd build; wine libwinhook_test32d.exe; cd -
+# cd build; wine libwinhook_test64d.exe; cd -
 
 # general config
 CC:=gcc # clang (llvm-mingw), gcc (mingw-w64), tcc (x86 stdcall name has problem)
@@ -42,7 +43,7 @@ clean:
 	@rm -rf $(BUILD_DIR)/*test*
 
 prepare:
-	@if ! [ -d $(BUILD_DIR) ]; then mkdir -p $(BUILD_DIR); fi
+	@mkdir -p $(BUILD_DIR)
 
 libwinhook: src/libwinhook.c
 	@echo "## $@"

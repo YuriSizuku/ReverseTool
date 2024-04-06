@@ -1,4 +1,4 @@
-# build example
+# build example, tested in linux 10.0.0-3, gcc 12, wine-9.0
 # make winloader CC=i686-w64-mingw32-gcc WINDRES=i686-w64-mingw32-windres BUILD_TYPE=32d 
 # make winloader CC=x86_64-w64-mingw32-gcc WINDRES=x86_64-w64-mingw32-windres BUILD_TYPE=64d
 
