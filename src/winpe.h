@@ -313,14 +313,9 @@ size_t STDCALL winpe_appendsecth(void *mempe, PIMAGE_SECTION_HEADER psecth);
 #endif
 
 #include <stdio.h>
+#include <assert.h>
 #include <windows.h>
 #include <winternl.h>
-
-#ifdef _DEBUG
-#include <assert.h>
-#else
-#define assert(x)
-#endif
 
 // PE high order fnctions
 void* STDCALL winpe_memload_file(const char *path, size_t *pmemsize, bool_t same_align)
@@ -390,7 +385,9 @@ void* STDCALL winpe_memLoadLibraryEx(void *mempe, size_t imagebase, DWORD flag,
     PFN_VirtualQuery pfnVirtualQuery = (PFN_VirtualQuery)pfnGetProcAddress(hmod_kernel32, name_VirtualQuery);
     PFN_VirtualAlloc pfnVirtualAlloc = (PFN_VirtualAlloc)pfnGetProcAddress(hmod_kernel32, name_VirtualAlloc);
     PFN_VirtualProtect pfnVirtualProtect =(PFN_VirtualProtect)pfnGetProcAddress(hmod_kernel32, name_VirtualProtect);
+#ifdef _DEBUG
     assert(pfnVirtualQuery!=0 && pfnVirtualAlloc!=0 && pfnVirtualProtect!=0);
+#endif
 
     // find proper imagebase
     size_t imagesize = winpe_imagesizeval(mempe, 0);
@@ -787,7 +784,9 @@ size_t STDCALL winpe_membindiat(void *mempe,
             funcva = (size_t)pfnGetProcAddress((HMODULE)dllbase, funcname);
             if(!funcva) continue;
             pFtThunk[j].u1.Function = funcva;
+#ifdef _DEBUG
             assert(funcva == (size_t)GetProcAddress((HMODULE)dllbase, funcname));
+#endif
             iat_count++;
         }
     }

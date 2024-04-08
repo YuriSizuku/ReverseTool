@@ -35,7 +35,7 @@ LDFLAGS= # tcc can not remove at at stdcall in i686
 else
 endif
 
-all: prepare libwinpe
+all: prepare libwinpe libwinpe_test
 
 clean:
 	@rm -rf $(BUILD_DIR)/*libwinpe*

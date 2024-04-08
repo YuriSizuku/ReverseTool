@@ -72,24 +72,24 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
-    <IntDir>$(SolutionDir)\build\obj\debug\i686</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)32d</IntDir>
     <TargetName>$(ProjectName)32d</TargetName>
     <OutDir>$(SolutionDir)\build</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\obj\debug\x86_64</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)64d</IntDir>
     <TargetName>$(ProjectName)64d</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\obj\release\i686</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)32</IntDir>
     <TargetName>$(ProjectName)32</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)\build\</OutDir>
-    <IntDir>$(SolutionDir)\build\obj\release\x86_64</IntDir>
+    <OutDir>$(SolutionDir)\build</OutDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)64</IntDir>
     <TargetName>$(ProjectName)64</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

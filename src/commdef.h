@@ -69,17 +69,17 @@
     wprintf(format, ##__VA_ARGS__);
 #define DummyPrintf(format, ...)
 #define LOG(format, ...) LogTagPrintf(format, "I", ##__VA_ARGS__)
-#define LOGL(format, ...) LogTagWprintf(format, L"I", ##__VA_ARGS__)
+#define LOGL(format, ...) LogTagWprintf(format, "I", ##__VA_ARGS__)
 #define LOGe(format, ...) LogTagPrintf(format, "E", ##__VA_ARGS__)
-#define LOGLe(format, ...) LogTagWprintf(format, L"E", ##__VA_ARGS__)
+#define LOGLe(format, ...) LogTagWprintf(format, "E", ##__VA_ARGS__)
 #define LOGw(format, ...) LogTagPrintf(format, "W", ##__VA_ARGS__)
-#define LOGLw(format, ...) LogTagWprintf(format, L"W", ##__VA_ARGS__)
+#define LOGLw(format, ...) LogTagWprintf(format, "W", ##__VA_ARGS__)
 #define LOGi(format, ...) LogTagPrintf(format, "I", ##__VA_ARGS__)
-#define LOGLi(format, ...) LogTagWprintf(format, L"I", ##__VA_ARGS__)
+#define LOGLi(format, ...) LogTagWprintf(format, "I", ##__VA_ARGS__)
 #define LOGd(format, ...) LogTagPrintf(format, "D", ##__VA_ARGS__)
-#define LOGLd(format, ...) LogTagWprintf(format, L"D", ##__VA_ARGS__)
+#define LOGLd(format, ...) LogTagWprintf(format, "D", ##__VA_ARGS__)
 #define LOGv(format, ...) LogTagPrintf(format, "V", ##__VA_ARGS__)
-#define LOGLv(format, ...) LogTagWprintf(format, L"V", ##__VA_ARGS__)
+#define LOGLv(format, ...) LogTagWprintf(format, "V", ##__VA_ARGS__)
 #endif // LOG_LEVEL_
 #ifndef LOG_LEVEL
 #define LOG_LEVEL LOG_LEVEL_INFO

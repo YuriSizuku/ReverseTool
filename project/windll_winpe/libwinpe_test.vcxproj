@@ -76,22 +76,22 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <TargetName>$(ProjectName)32</TargetName>
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\obj\release\i686</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)32</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>$(ProjectName)64</TargetName>
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\release\x86_64</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)64</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>$(ProjectName)64d</TargetName>
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\debug\x86_64</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)64d</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <TargetName>$(ProjectName)32d</TargetName>
     <OutDir>$(SolutionDir)\build</OutDir>
-    <IntDir>$(SolutionDir)\build\release\debug\i686</IntDir>
+    <IntDir>$(SolutionDir)\build\obj\$(ProjectName)32d</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

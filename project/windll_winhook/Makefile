@@ -35,7 +35,7 @@ LDFLAGS= # tcc can not remove at at stdcall in i686
 else
 endif
 
-all: prepare libwinhook
+all: prepare libwinhook libwinhook_test helloexe hellodll
 
 clean:
 	@rm -rf $(BUILD_DIR)/*libwinhook*

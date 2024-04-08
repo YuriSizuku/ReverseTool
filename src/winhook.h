@@ -206,10 +206,10 @@ BOOL winhook_iathook(LPCSTR targetDllName, PROC pfnOrg, PROC pfgNew)
  * @return: success hook numbers
 */
 WINHOOK_API
-int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], size_t n);
+int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], int n);
 
 WINHOOK_API
-int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], size_t n);
+int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], int n);
 
 #ifdef WINHOOK_IMPLEMENTATION
 #include <stdio.h>
@@ -700,7 +700,7 @@ BOOL winhook_iathookpe(LPCSTR targetDllName, void* mempe, PROC pfnOrg, PROC pfnN
 #include "stb_minhook.h"
 #endif
 
-int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], size_t n)
+int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], int n)
 {
     int i;
     MH_Initialize();
@@ -716,7 +716,7 @@ int winhook_inlinehooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], si
     return i;
 }
 
-int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], size_t n)
+int winhook_inlineunhooks(PVOID pfnTargets[], PVOID pfnNews[], PVOID pfnOlds[], int n)
 {
     int i;
     for(i=0; i<n ;i++)
