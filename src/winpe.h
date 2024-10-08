@@ -770,7 +770,7 @@ size_t STDCALL winpe_membindiat(void *mempe,
             }
             else
             {
-                if(((size_t)pImpByName>>31) == 1)
+                if(((size_t)_addr>>31) == 1)
                 {
                     funcname = (char *)(_addr & 0x0000ffff);
                 }
